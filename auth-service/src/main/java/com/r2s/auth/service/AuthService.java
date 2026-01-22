@@ -14,6 +14,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -41,7 +43,8 @@ public class AuthService {
             throw new RuntimeException("Wrong password");
         }
 
-        String accessToken = jwtUtil.generateToken(user.getUsername());
+        String role = user.getRole().name();
+        String accessToken = jwtUtil.generateToken(user.getUsername(), role);
         return new AuthResponse(accessToken);
 
     }

@@ -12,6 +12,7 @@ import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.List;
 
 @Component
 public class JwtUtil {
@@ -25,7 +26,7 @@ public class JwtUtil {
         this.accessExpMinutes = accessExpMinutes;
     }
 
-    public String generateToken(String username) {
+    public String generateToken(String username,String role) {
         Date now = new Date();
         Date expiration = Date.from(
                 Instant.now().plus(accessExpMinutes, ChronoUnit.MINUTES)
@@ -33,6 +34,7 @@ public class JwtUtil {
 
         return Jwts.builder()
                 .setSubject(username)
+                .claim("role",role)
                 .setIssuedAt(now)
                 .setExpiration(expiration)
                 .signWith(accessKey, SignatureAlgorithm.HS256)

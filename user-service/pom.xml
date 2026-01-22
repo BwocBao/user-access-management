@@ -25,7 +25,24 @@
           <groupId>org.springframework.boot</groupId>
           <artifactId>spring-boot-starter-web</artifactId>
       </dependency>
-
+      <!--       Import core-->
+      <dependency>
+          <groupId>com.r2s</groupId>
+          <artifactId>core</artifactId>
+          <version>1.0-SNAPSHOT</version>
+      </dependency>
+      <!-- Lombok -->
+      <dependency>
+          <groupId>org.projectlombok</groupId>
+          <artifactId>lombok</artifactId>
+          <optional>true</optional>
+      </dependency>
+      <!-- DB -->
+      <dependency>
+          <groupId>com.mysql</groupId>
+          <artifactId>mysql-connector-j</artifactId>
+          <scope>runtime</scope>
+      </dependency>
       <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
