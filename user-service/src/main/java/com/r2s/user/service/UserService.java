@@ -1,11 +1,11 @@
 package com.r2s.user.service;
 
+import com.r2s.core.entity.Role;
+import com.r2s.core.entity.User;
+import com.r2s.core.repository.UserRepository;
 import com.r2s.user.dto.UpdateUserRequest;
 import com.r2s.user.dto.UserResponse;
-import com.r2s.user.entity.Role;
-import com.r2s.user.entity.User;
 import com.r2s.user.mapper.UserMapper;
-import com.r2s.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,20 +26,23 @@ public class UserService {
     public  UserResponse getUserByUsername(String username) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
+
+
         String roleStr = auth.getAuthorities()
                 .iterator()
                 .next()
                 .getAuthority(); // ROLE_ADMIN
 
-        Role role = Role.valueOf(roleStr); // ✅ ENUM
+        Role role = Role.valueOf(roleStr); //ENUM
 
         User user = userRepository.findByUsername(username)
                 .orElseGet(() -> {
                     User newUser = new User();
                     newUser.setUsername(username);
-                    newUser.setRole(role);      // ⭐ ENUM
+                    newUser.setRole(role);      //ENUM
                     newUser.setFullName("");
                     newUser.setEmail("");
+                    newUser.setPassword("");
                     return userRepository.save(newUser);
                 });
         return UserMapper.toUserResponse(user);
@@ -56,6 +59,7 @@ public class UserService {
                     User newUser = new User();
                     newUser.setUsername(username);
                     newUser.setRole(role); // ENUM
+                    newUser.setPassword("");
                     return newUser;
                 });
 

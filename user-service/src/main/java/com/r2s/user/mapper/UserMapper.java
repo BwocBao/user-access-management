@@ -1,8 +1,8 @@
 package com.r2s.user.mapper;
 
 
+import com.r2s.core.entity.User;
 import com.r2s.user.dto.UserResponse;
-import com.r2s.user.entity.User;
 
 public class UserMapper {
     public static UserResponse toUserResponse(User user) {
