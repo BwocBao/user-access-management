@@ -2,26 +2,23 @@
 <project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
-  <parent>
-    <groupId>com.r2s</groupId>
-    <artifactId>user-access-management</artifactId>
-    <version>1.0-SNAPSHOT</version>
-  </parent>
+    <parent>
+        <groupId>com.r2s</groupId>
+        <artifactId>user-access-management</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
     <artifactId>auth-service</artifactId>
     <packaging>jar</packaging>
     <name>auth-service</name>
     <description>auth-service</description>
-    <properties>
-        <java.version>17</java.version>
-        <spring.boot.version>3.4.4</spring.boot.version>
-    </properties>
   <dependencies>
-      <!--       Import core-->
+      <!-- Module core dùng chung entity, repo, security -->
       <dependency>
           <groupId>com.r2s</groupId>
           <artifactId>core</artifactId>
-          <version>1.0-SNAPSHOT</version>
+          <version>${project.version}</version>
       </dependency>
+
       <!-- Web -->
       <dependency>
           <groupId>org.springframework.boot</groupId>
@@ -44,11 +41,31 @@
 <!--          <artifactId>mysql-connector-j</artifactId>-->
 <!--          <scope>runtime</scope>-->
 <!--      </dependency>-->
-      <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>3.8.1</version>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
+    <build>
+        <plugins>
+            <!-- Repackage thành fat-jar -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Compiler -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>${java.version}</release>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>
