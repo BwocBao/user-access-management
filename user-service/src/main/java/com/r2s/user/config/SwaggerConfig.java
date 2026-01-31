@@ -1,4 +1,4 @@
-package com.r2s.auth.config;
+package com.r2s.user.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -52,4 +52,3 @@ public class SwaggerConfig {
                 .build();
     }
 }
-
