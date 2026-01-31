@@ -3,18 +3,17 @@ package com.r2s.auth.service;
 import com.r2s.auth.dto.AuthResponse;
 import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
-
 import com.r2s.auth.dto.RegisterRoleRequest;
-import com.r2s.auth.entity.Role;
-import com.r2s.auth.entity.User;
-import com.r2s.auth.repository.UserRepository;
-import com.r2s.auth.security.JwtUtil;
+import com.r2s.core.entity.Role;
+import com.r2s.core.entity.User;
+import com.r2s.core.exception.CustomException;
+import com.r2s.core.exception.UnAuthorizedException;
+import com.r2s.core.repository.UserRepository;
+import com.r2s.core.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +24,7 @@ public class AuthService {
 
     public void register(RegisterRequest registerRequest) {
         if(userRepository.findByUsername(registerRequest.getUsername()).isPresent()){
-            throw new RuntimeException("Username exist");
+            throw new CustomException("Username exist");
         }
 
         User user = new User();
@@ -40,7 +39,7 @@ public class AuthService {
                 .orElseThrow(() -> new UsernameNotFoundException("Not found"));
 
         if(!passwordEncoder.matches(loginRequest.getPassword(),user.getPassword())){
-            throw new RuntimeException("Wrong password");
+            throw new UnAuthorizedException("Wrong password");
         }
 
         String role = user.getRole().name();
@@ -51,7 +50,7 @@ public class AuthService {
 
     public void registerRole(RegisterRoleRequest req) {
         if(userRepository.findByUsername(req.getUsername()).isPresent()){
-            throw new RuntimeException("Username exist");
+            throw new CustomException("Username exist");
         }
 
         User user = new User();
@@ -59,7 +58,7 @@ public class AuthService {
         try {
             role = Role.valueOf(req.getRole().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Invalid role");
+            throw new CustomException("Invalid role");
         }
         user.setUsername(req.getUsername());
         user.setPassword(passwordEncoder.encode(req.getPassword()));
