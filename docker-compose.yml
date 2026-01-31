@@ -35,7 +35,9 @@ services:
 
 
   auth-service:
-    build: ./auth-service
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
     container_name: auth-service
     #Crash → tự restart.
     restart: always
@@ -61,8 +63,9 @@ services:
 
 
   user-service:
-    build: ./user-service
-    container_name: user-service
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
     restart: always
 
     env_file:
@@ -88,3 +91,11 @@ services:
 #Giống mình chạy lệnh docker volume create postgres_data
 volumes:
   postgres_data:
+
+#Đầu tiên docker đọc docker-compose và xác định build context
+#  1️⃣ Docker đọc .dockerignore
+#  2️⃣ Docker loại file khỏi context
+#  3️⃣ Docker gửi context sang daemon
+#  4️⃣ Dockerfile mới bắt đầu chạy COPY
+#Nếu ko dockerignore thì docker sẽ nén toàn bộ project gửi sang daemon rồi lúc này Dockerfile mới bắt đầu
+#nhưng chỉ copy rất ít cái(pom với src) nên ko cần nén hết tất cả quăng qua rất tốn CPU và RAM

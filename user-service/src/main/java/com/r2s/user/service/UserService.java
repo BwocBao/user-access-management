@@ -2,6 +2,7 @@ package com.r2s.user.service;
 
 import com.r2s.core.entity.Role;
 import com.r2s.core.entity.User;
+import com.r2s.core.exception.ResourceNotFoundExecption;
 import com.r2s.core.repository.UserRepository;
 import com.r2s.user.dto.UpdateUserRequest;
 import com.r2s.user.dto.UserResponse;
@@ -72,6 +73,9 @@ public class UserService {
 
     @Transactional
     public void deleteUserByUsername(String username) {
+        if (!userRepository.existsByUsername(username)) {
+            throw new ResourceNotFoundExecption("User not found: " + username);
+        }
         userRepository.deleteByUsername(username);
     }
 }
