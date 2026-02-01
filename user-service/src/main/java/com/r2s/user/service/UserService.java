@@ -44,11 +44,8 @@ public class UserService {
         return userMapper.toUserResponse(user);
     }
 
-    public UserResponse updateUser(UpdateUserRequest req, String username) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        Role role = Role.valueOf(
-                auth.getAuthorities().iterator().next().getAuthority()
-        );
+    public UserResponse updateUser(UpdateUserRequest req, String username,String roleStr) {
+        Role role = Role.valueOf(roleStr); //ENUM
 
         User user = userRepository.findByUsername(username)
                 .orElseGet(() -> {

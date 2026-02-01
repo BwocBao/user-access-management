@@ -47,9 +47,13 @@ public class UserController {
     @PutMapping("/me")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public ResponseEntity<UserResponse> updateMyProfile(@Valid @RequestBody UpdateUserRequest updateUserRequest,
-                                                        Authentication authentication) {
-        String username = authentication.getName();
-        return ResponseEntity.ok(userService.updateUser(updateUserRequest,username));
+                                                        Authentication auth) {
+        String username = auth.getName();
+        String role = auth.getAuthorities()
+                .iterator()
+                .next()
+                .getAuthority();
+        return ResponseEntity.ok(userService.updateUser(updateUserRequest,username,role));
     }
 
     @DeleteMapping("/{username}")
