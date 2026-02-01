@@ -2,6 +2,7 @@ package com.r2s.user.dto;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
@@ -9,7 +10,7 @@ import lombok.Setter;
 @Builder
 public class UserResponse {
     private String username;
-    private String Role;
+    private String role;
     private String email;
     private String fullName;
 }

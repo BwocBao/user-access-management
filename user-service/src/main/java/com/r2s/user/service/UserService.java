@@ -19,21 +19,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+    private final UserMapper userMapper;
 
     public List<UserResponse> getAllUsers() {
-        return userRepository.findAll().stream().map(UserMapper::toUserResponse).toList();
+        return userRepository.findAll()
+                .stream()
+                .map(userMapper::toUserResponse)
+                .toList();
     }
 
-    public  UserResponse getUserByUsername(String username) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-
-
-
-        String roleStr = auth.getAuthorities()
-                .iterator()
-                .next()
-                .getAuthority(); // ROLE_ADMIN
-
+    public  UserResponse getUserByUsername(String username,String roleStr) {
         Role role = Role.valueOf(roleStr); //ENUM
 
         User user = userRepository.findByUsername(username)
@@ -46,7 +41,7 @@ public class UserService {
                     newUser.setPassword("");
                     return userRepository.save(newUser);
                 });
-        return UserMapper.toUserResponse(user);
+        return userMapper.toUserResponse(user);
     }
 
     public UserResponse updateUser(UpdateUserRequest req, String username) {
@@ -68,7 +63,7 @@ public class UserService {
         user.setEmail(req.getEmail());
 
         userRepository.save(user);
-        return UserMapper.toUserResponse(user);
+        return userMapper.toUserResponse(user);
     }
 
     @Transactional

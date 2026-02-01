@@ -36,7 +36,12 @@ public class UserController {
     public ResponseEntity<UserResponse> getMyProfile() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
-        return ResponseEntity.ok(userService.getUserByUsername(username));
+        String role = auth.getAuthorities()
+                .iterator()
+                .next()
+                .getAuthority();
+
+        return ResponseEntity.ok(userService.getUserByUsername(username, role));
     }
 
     @PutMapping("/me")
