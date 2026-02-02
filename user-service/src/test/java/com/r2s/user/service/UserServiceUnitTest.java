@@ -295,5 +295,32 @@ class UserServiceUnitTest {
         verifyNoMoreInteractions(userRepository);
         verifyNoInteractions(userMapper);
     }
-
 }
+//Khi nào NÊN test PropagateException_whenDatabaseError?
+//✅ Test khi: Service CÓ logic xử lý exception
+//Ví dụ 1: map exception
+//try {
+//        userRepository.save(user);
+//} catch (DataIntegrityViolationException e) {
+//        throw new CustomException("Username exist");
+//}
+//➡️ BẮT BUỘC TEST
+//
+//shouldThrowCustomException_whenDuplicateUsername()
+//
+//Ví dụ 2: rollback / transaction
+//@Transactional
+//public void createUser() {
+//    repo.save(user);
+//    mailService.send();
+//}
+//➡️ Test khi: save fail → mail không được gọi hoặc ngược lại
+//
+//Ví dụ 3: retry / fallback / log
+//try {
+//        repo.save(user);
+//} catch (Exception e) {
+//        log.error(...);
+//        throw e;
+//}
+//➡️ Test để đảm bảo: log đúng / exception không bị nuốt
