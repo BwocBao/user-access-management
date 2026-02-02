@@ -25,6 +25,7 @@ public class UserController {
     public String hello() {
         return "Hello from User Service";
     }
+
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<UserResponse>> getAllUsers() {

@@ -1,9 +1,10 @@
-package com.r2s.auth.service;
+package com.r2s.auth.unit.service;
 
 import com.r2s.auth.dto.AuthResponse;
 import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
+import com.r2s.auth.service.AuthService;
 import com.r2s.core.entity.Role;
 import com.r2s.core.entity.User;
 import com.r2s.core.exception.CustomException;
@@ -230,6 +231,4 @@ class AuthServiceUnitTest {
         verifyNoMoreInteractions(userRepository);
         verifyNoInteractions(passwordEncoder, jwtUtil);
     }
-
-
 }
