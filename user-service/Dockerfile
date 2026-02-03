@@ -41,3 +41,22 @@ USER userserviceuser
 EXPOSE 8082
 #lệnh chạy app
 ENTRYPOINT ["java","-jar","user-service.jar"]
+
+
+
+
+
+
+
+
+
+#Cách 2:
+#FROM eclipse-temurin:17-jdk-jammy
+#
+#WORKDIR /app
+#COPY target/*.jar user-service.jar
+#
+## Expose the port the app runs on
+#EXPOSE 8082
+## Run the jar file
+#ENTRYPOINT ["java", "-jar", "user-service.jar"]

@@ -40,3 +40,24 @@ USER authserviceuser
 EXPOSE 8081
 #lệnh chạy app
 ENTRYPOINT ["java","-jar","auth-service.jar"]
+
+
+
+
+
+
+
+
+
+
+
+#Cách 2:
+#FROM eclipse-temurin:17-jdk-jammy
+#
+#WORKDIR /app
+#COPY target/*.jar auth-service.jar
+#
+## Expose the port the app runs on
+#EXPOSE 8081
+## Run the jar file
+#ENTRYPOINT ["java", "-jar", "auth-service.jar"]
