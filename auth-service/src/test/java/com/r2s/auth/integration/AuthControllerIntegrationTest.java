@@ -1,19 +1,16 @@
-package com.r2s.auth.unit.controller;
+package com.r2s.auth.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
-import com.r2s.core.security.JwtFilter;
-import com.r2s.core.security.JwtUtil;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -30,14 +27,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
-public class AuthControllerItegrationTest {
+public class AuthControllerIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ObjectMapper objectMapper;
 
+//  Trước khi chạy MỖI test case → xóa sạch dữ liệu trong DB. Vẫn tái sử dụng docker container
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
+    @BeforeEach
+    void cleanDatabase() {
+        jdbcTemplate.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
+    }
     // ============================
     // PostgreSQL Container
     // ============================
@@ -88,7 +92,7 @@ public class AuthControllerItegrationTest {
     void register_shouldReturn200_whenValid() throws Exception {
 
         RegisterRequest request = new RegisterRequest();
-        request.setUsername("test");
+        request.setUsername("bwocbao");
         request.setPassword("123456");
 
         mockMvc.perform(post("/api/auth/register")
@@ -118,7 +122,7 @@ public class AuthControllerItegrationTest {
     void registerRole_shouldReturn200_whenValid() throws Exception {
 
         RegisterRoleRequest request = new RegisterRoleRequest();
-        request.setUsername("Danh");
+        request.setUsername("bwocbao");
         request.setPassword("123456");
         request.setRole("Role_Admin");
 
@@ -137,7 +141,7 @@ public class AuthControllerItegrationTest {
     void registerRole_shouldReturn400_whenRoleInvalid() throws Exception {
 
         RegisterRoleRequest request = new RegisterRoleRequest();
-        request.setUsername("huy");
+        request.setUsername("bwocbao");
         request.setPassword("123456");
         request.setRole("Role_superman");
 
@@ -186,7 +190,7 @@ public class AuthControllerItegrationTest {
     void login_shouldReturn401_whenUsernameNotExist() throws Exception {
         // 1. Login
         LoginRequest login = new LoginRequest();
-        login.setUsername("super");
+        login.setUsername("bwocbao");
         login.setPassword("123456");
 
         mockMvc.perform(post("/api/auth/login")
@@ -202,7 +206,7 @@ public class AuthControllerItegrationTest {
 
         // 1. Register trước
         RegisterRequest register = new RegisterRequest();
-        register.setUsername("bao");
+        register.setUsername("bwocbao");
         register.setPassword("123456");
 
         mockMvc.perform(post("/api/auth/register")
@@ -212,7 +216,7 @@ public class AuthControllerItegrationTest {
 
         // 2. Login
         LoginRequest login = new LoginRequest();
-        login.setUsername("bao");
+        login.setUsername("bwocbao");
         login.setPassword("123457");
 
         mockMvc.perform(post("/api/auth/login")

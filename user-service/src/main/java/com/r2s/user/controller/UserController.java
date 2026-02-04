@@ -43,7 +43,8 @@ public class UserController {
                 .next()
                 .getAuthority();
 
-        return ResponseEntity.ok(ApiResponse.success(userService.getUserByUsername(username, role),"Profile retrieved successfully"));
+        return ResponseEntity.ok(ApiResponse
+                .success(userService.getUserByUsername(username, role),"Profile retrieved successfully"));
     }
 
     @PutMapping("/me")
