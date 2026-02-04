@@ -11,7 +11,6 @@ import com.r2s.core.exception.UnAuthorizedException;
 import com.r2s.core.repository.UserRepository;
 import com.r2s.core.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -36,7 +35,7 @@ public class AuthService {
 
     public AuthResponse login(LoginRequest loginRequest) {
         User user=userRepository.findByUsername(loginRequest.getUsername())
-                .orElseThrow(() -> new UsernameNotFoundException("Not found"));
+                .orElseThrow(() -> new UnAuthorizedException("Username does not exist"));
 
         if(!passwordEncoder.matches(loginRequest.getPassword(),user.getPassword())){
             throw new UnAuthorizedException("Wrong password");

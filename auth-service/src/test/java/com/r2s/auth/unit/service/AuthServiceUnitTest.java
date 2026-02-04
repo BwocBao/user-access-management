@@ -130,8 +130,8 @@ class AuthServiceUnitTest {
         when(userRepository.findByUsername("notExist")).thenReturn(Optional.empty());
 
         assertThatThrownBy(()->authService.login(req))
-                .isInstanceOf(UsernameNotFoundException.class)
-                .hasMessageContaining("Not found");
+                .isInstanceOf(UnAuthorizedException.class)
+                .hasMessageContaining("Username does not exist");
 
         verify(userRepository).findByUsername("notExist");
         verifyNoMoreInteractions(userRepository, passwordEncoder);

@@ -7,6 +7,7 @@ import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
 import com.r2s.auth.service.AuthService;
+import com.r2s.core.security.JwtFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -24,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@ActiveProfiles("test")
+@ActiveProfiles("unittest")
 class AuthControllerUnitTest {
     private static final String API="/api/auth";
 
@@ -39,7 +40,7 @@ class AuthControllerUnitTest {
 
 
     @MockBean
-    com.r2s.core.security.JwtFilter jwtFilter;
+    private JwtFilter jwtFilter;
 
     @Test
     void hello_shouldReturnHelloMessage() throws Exception {
@@ -59,7 +60,10 @@ class AuthControllerUnitTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("User registered successfully"));
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message")
+                        .value("User registered successfully"))
+                .andExpect(jsonPath("$.data").isEmpty());
 
         verify(authService).register(any(RegisterRequest.class));
     }
@@ -75,7 +79,8 @@ class AuthControllerUnitTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string("Username is required"));
+                .andExpect(jsonPath("$.username").value("Username is required"))
+                .andExpect(jsonPath("$.password").value("Password is required"));
 
         verifyNoInteractions(authService);
     }
@@ -96,7 +101,10 @@ class AuthControllerUnitTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("token123"));
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message")
+                        .value("User logged successfully"))
+                .andExpect(jsonPath("$.data.token").value("token123"));
 
         verify(authService).login(any(LoginRequest.class));
     }
@@ -123,14 +131,16 @@ class AuthControllerUnitTest {
         RegisterRoleRequest req = RegisterRoleRequest.builder()
                 .username("admin1")
                 .password("123")
-                .role("ADMIN")
+                .role("ROLE_ADMIN")
                 .build();
 
         mockMvc.perform(post("/api/auth/register/role")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(content().string("User registered successfully"));
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message").value("User registered successfully"))
+                .andExpect(jsonPath("$.data").isEmpty());
 
         verify(authService).registerRole(any(RegisterRoleRequest.class));
     }
@@ -146,7 +156,11 @@ class AuthControllerUnitTest {
         mockMvc.perform(post("/api/auth/register/role")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.username").value("Username is required"))
+                .andExpect(jsonPath("$.password").value("Password is required"))
+                        .andExpect(jsonPath("$.role").value("Role is required"));
+
 
         verifyNoInteractions(authService);
     }

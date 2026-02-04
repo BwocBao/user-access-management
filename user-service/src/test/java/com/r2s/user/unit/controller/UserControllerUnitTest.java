@@ -13,7 +13,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -23,20 +22,23 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(UserController.class)
 @Import(SecurityConfig.class) // import config thật
-@AutoConfigureMockMvc(addFilters = true) // BẬT SECURITY
+@AutoConfigureMockMvc // BẬT SECURITY / mặc định addFilters = true
+@ActiveProfiles("unittest")
 class UserControllerUnitTest {
     private static final String API = "/api/users";
 
@@ -94,10 +96,37 @@ class UserControllerUnitTest {
     @Test
     @WithMockUser(username = "admin", roles = {"ADMIN"})
     void getAllUsers_shouldReturn200_whenAdmin() throws Exception {
-        when(userService.getAllUsers()).thenReturn(List.of());
+        List<UserResponse> mockUsers = List.of(
+                new UserResponse("admin2", "ROLE_ADMIN", "admin@example.com", "Gia Bao"),
+                new UserResponse("jane", "ROLE_USER", "jane@example.com", "Jane Smith")
+        );
 
-        mockMvc.perform(get(API))
-                .andExpect(status().isOk());
+        when(userService.getAllUsers()).thenReturn(mockUsers);
+
+
+        ResultActions response = mockMvc.perform(get(API));
+        response.andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message")
+                        .value("Users retrieved successfully"))
+                // Check size
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(2))
+
+                // User 1
+                .andExpect(jsonPath("$.data[0].username").value("admin2"))
+                .andExpect(jsonPath("$.data[0].role").value("ROLE_ADMIN"))
+                .andExpect(jsonPath("$.data[0].email").value("admin@example.com"))
+                .andExpect(jsonPath("$.data[0].fullName").value("Gia Bao"))
+
+                // User 2
+                .andExpect(jsonPath("$.data[1].username").value("jane"))
+                .andExpect(jsonPath("$.data[1].role").value("ROLE_USER"))
+                .andExpect(jsonPath("$.data[1].email").value("jane@example.com"))
+                .andExpect(jsonPath("$.data[1].fullName").value("Jane Smith"));
+
+        verify(userService).getAllUsers();
+        verifyNoMoreInteractions(userService);
     }
 
     @Test
@@ -109,8 +138,8 @@ class UserControllerUnitTest {
 
 //    Không có JWT / không có user. Gán AnonymousAuthenticationToken
 //    Kiểm tra hasRole('ADMIN'). Anonymous không có role ADMIN
-//⇒ Access Denied → 403
-//➡️ Không phải unauthenticated, mà là authenticated as ANONYMOUS
+//    ⇒ Access Denied → 403
+//  ➡️ Không phải unauthenticated, mà là authenticated as ANONYMOUS
     @Test
     void getAllUsers_shouldReturn401_whenUnauthenticated() throws Exception {
         mockMvc.perform(get(API))
@@ -133,8 +162,14 @@ class UserControllerUnitTest {
 
         mockMvc.perform(get(API + "/me"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("bao"))
-                .andExpect(jsonPath("$.role").value("ROLE_USER"));
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message")
+                        .value("Profile retrieved successfully"))
+                .andExpect(jsonPath("$.data.username").value("bao"))
+                .andExpect(jsonPath("$.data.role").value("ROLE_USER"));
+
+        verify(userService).getUserByUsername("bao", "ROLE_USER");
+        verifyNoMoreInteractions(userService);
     }
 
     // =========================
@@ -155,15 +190,26 @@ class UserControllerUnitTest {
                 .fullName("Bao Nguyen")
                 .build();
 
-        when(userService.updateUser(any(UpdateUserRequest.class), eq("bao"), eq("ROLE_USER")))
+        when(userService.updateUser(any(UpdateUserRequest.class),
+                eq("bao"),
+                eq("ROLE_USER")))
                 .thenReturn(res);
 
         mockMvc.perform(put(API + "/me")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("new@email.com"))
-                .andExpect(jsonPath("$.fullName").value("Bao Nguyen"));
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message")
+                        .value("Profile updated successfully"))
+                .andExpect(jsonPath("$.data.username").value("bao"))
+                .andExpect(jsonPath("$.data.role").value("ROLE_USER"))
+                .andExpect(jsonPath("$.data.email").value("new@email.com"))
+                .andExpect(jsonPath("$.data.fullName").value("Bao Nguyen"))
+                .andDo(print());;
+
+        verify(userService).updateUser(any(UpdateUserRequest.class),eq("bao"),eq("ROLE_USER"));
+        verifyNoMoreInteractions(userService);
     }
 
     // =========================

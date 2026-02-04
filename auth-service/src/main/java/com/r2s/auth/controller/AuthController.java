@@ -5,6 +5,7 @@ import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
 import com.r2s.auth.service.AuthService;
+import com.r2s.core.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,19 +22,19 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest registerRequest) {
+    public ResponseEntity<ApiResponse> register(@Valid @RequestBody RegisterRequest registerRequest) {
         authService.register(registerRequest);
-        return ResponseEntity.ok("User registered successfully");
+        return ResponseEntity.ok(ApiResponse.success(null,"User registered successfully"));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
-        return ResponseEntity.ok(authService.login(loginRequest));
+    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest loginRequest) {
+        return ResponseEntity.ok(ApiResponse.success(authService.login(loginRequest),"User logged successfully") );
     }
 
     @PostMapping("/register/role")
-    public ResponseEntity<String> registerRole(@Valid @RequestBody RegisterRoleRequest registerRoleRequest) {
+    public ResponseEntity<ApiResponse> registerRole(@Valid @RequestBody RegisterRoleRequest registerRoleRequest) {
         authService.registerRole(registerRoleRequest);
-        return ResponseEntity.ok("User registered successfully");
+        return ResponseEntity.ok(ApiResponse.success(null,"User registered successfully"));
     }
 }

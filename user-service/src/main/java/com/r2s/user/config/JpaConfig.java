@@ -1,4 +1,4 @@
-package com.r2s.auth.config;
+package com.r2s.user.config;
 
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.Configuration;

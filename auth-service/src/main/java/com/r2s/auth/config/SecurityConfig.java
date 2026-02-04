@@ -1,6 +1,8 @@
 package com.r2s.auth.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r2s.core.security.JwtFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +23,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final JwtFilter jwtFilter;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception{
@@ -33,7 +36,23 @@ public class SecurityConfig {
                         authorizeRequests ->
                                 authorizeRequests
                                         .requestMatchers("/api/auth/**").permitAll()
-                                        .anyRequest().authenticated());
+                                        .anyRequest().authenticated())
+                .exceptionHandling(
+                        ex ->
+                                ex.authenticationEntryPoint(
+                                                (req, res, e) -> {
+                                                    res.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401
+                                                    res.setContentType("application/json");
+                                                    res.getWriter()
+                                                            .write("Unauthorized or token missing or invalid");
+                                                })
+                                        .accessDeniedHandler(
+                                                (req, res, e) -> {
+                                                    res.setStatus(HttpServletResponse.SC_FORBIDDEN); // 403
+                                                    res.setContentType("application/json");
+                                                    res.getWriter()
+                                                            .write(("Forbidden: not enough permissions"));
+                                                }));
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

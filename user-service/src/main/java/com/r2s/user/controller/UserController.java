@@ -1,5 +1,6 @@
 package com.r2s.user.controller;
 
+import com.r2s.core.dto.ApiResponse;
 import com.r2s.user.dto.UpdateUserRequest;
 import com.r2s.user.dto.UserResponse;
 import com.r2s.user.service.UserService;
@@ -28,13 +29,13 @@ public class UserController {
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
+        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(),("Users retrieved successfully")));
     }
 
     @GetMapping("/me")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
-    public ResponseEntity<UserResponse> getMyProfile() {
+    public ResponseEntity<ApiResponse<UserResponse>> getMyProfile() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
         String role = auth.getAuthorities()
@@ -42,19 +43,19 @@ public class UserController {
                 .next()
                 .getAuthority();
 
-        return ResponseEntity.ok(userService.getUserByUsername(username, role));
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserByUsername(username, role),"Profile retrieved successfully"));
     }
 
     @PutMapping("/me")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
-    public ResponseEntity<UserResponse> updateMyProfile(@Valid @RequestBody UpdateUserRequest updateUserRequest,
+    public ResponseEntity<ApiResponse<UserResponse>> updateMyProfile(@Valid @RequestBody UpdateUserRequest updateUserRequest,
                                                         Authentication auth) {
         String username = auth.getName();
         String role = auth.getAuthorities()
                 .iterator()
                 .next()
                 .getAuthority();
-        return ResponseEntity.ok(userService.updateUser(updateUserRequest,username,role));
+        return ResponseEntity.ok(ApiResponse.success(userService.updateUser(updateUserRequest,username,role),"Profile updated successfully"));
     }
 
     @DeleteMapping("/{username}")
