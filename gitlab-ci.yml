@@ -87,6 +87,7 @@ deploy-job:
     DOCKER_TLS_CERTDIR: ""
   only:
     - main
+    - part-8
   script:
     # Dừng stack cũ (nếu có)
     - docker compose down || true
