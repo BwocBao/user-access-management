@@ -1,9 +1,9 @@
 image: maven:3.9.6-eclipse-temurin-21
 
 services:
-#tương đương docker run postgres:15
+  #tương đương docker run postgres:15
   - name: postgres:15
-#Container của postgres sẽ được gọi bằng tên: postgres-db
+    #Container của postgres sẽ được gọi bằng tên: postgres-db
     alias: postgres-db
 
 variables:
@@ -12,7 +12,7 @@ variables:
   AUTH_DB: auth_service
   USER_DB: user_service
   SPRING_PROFILES_ACTIVE: ci
-#Chỉ định Maven lưu dependency vào: .m2/repository. Thay vì ~/.m2=> Để cache được.
+  #Chỉ định Maven lưu dependency vào: .m2/repository. Thay vì ~/.m2=> Để cache được.
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
 
 cache:
@@ -35,11 +35,11 @@ build-job:
     - chmod +x mvnw
     - ./mvnw clean install -DskipTests
   artifacts:
-#Lưu file build được để stage sau dùng.
+    #Lưu file build được để stage sau dùng.
     paths:
       - user-access-management/auth-service/target/*.jar
       - user-access-management/user-service/target/*.jar
-#Sau 1 giờ sẽ xóa.
+    #Sau 1 giờ sẽ xóa.
     expire_in: 1 hour
 
 # ================= TEST =================
@@ -49,21 +49,21 @@ test-job:
     - local
   before_script:
     - cd user-access-management
-#postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
+    #postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
     - apt-get update && apt-get install -y postgresql-client curl
-#Tải script từ GitHub. Option:-s silent. -S show error. -L follow redirect. -o output file
+    #Tải script từ GitHub. Option:-s silent. -S show error. -L follow redirect. -o output file
     - curl -sSL https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -o wait-for-it.sh
     - chmod +x wait-for-it.sh
-#Chờ postgres-db port 5432. Timeout 60 giây
+    #Chờ postgres-db port 5432. Timeout 60 giây
     - ./wait-for-it.sh postgres-db:5432 -t 60 -- echo "postgres-db is up"
 
     # Tạo DB nếu chưa tồn tại
     - export PGPASSWORD=$POSTGRES_PASSWORD
-#-h postgres-db → connect tới service postgres. -U → user. -t → chỉ output kết quả. -c → chạy câu lệnh SQL
+    #-h postgres-db → connect tới service postgres. -U → user. -t → chỉ output kết quả. -c → chạy câu lệnh SQL
+    #Nếu select ra 1 thì sẽ grep ra được và thoát ko tạo db. Ngược lại chưa có db thì tạo db
     - |
       for DB in "$AUTH_DB" "$USER_DB"; do
         echo "Checking database $DB"
-#Nếu select ra 1 thì sẽ grep ra được và thoát ko tạo db. Ngược lại chưa có db thì tạo db
         psql -h postgres-db -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$DB'" | grep -q 1 || \
         psql -h postgres-db -U $POSTGRES_USER -c "CREATE DATABASE \"$DB\""
       done
@@ -93,7 +93,6 @@ deploy-job:
     - docker compose down || true
     # Build lại image + chạy lên
     - docker compose up -d --build
-
 
 
 
