@@ -1,0 +1,10 @@
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\config\JpaConfig.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\dto\RegisterRoleRequest.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\service\AuthService.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\AuthServiceApplication.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\dto\LoginRequest.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\controller\RoleController.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\config\SecurityConfig.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\controller\AuthController.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\dto\RegisterRequest.java
+C:\dev\user-access-management\auth-service\src\main\java\com\r2s\auth\dto\AuthResponse.java
