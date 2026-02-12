@@ -70,8 +70,12 @@ test-job:
     # KHÔNG clean nữa
     # Chỉ chạy test\
     - chmod +x mvnw
-    - ./mvnw test -e
-    - cat auth-service/target/surefire-reports/*.txt || true
+    - ./mvnw test -e || true
+    - echo "==== LIST REPORT FILES ===="
+    - ls -R auth-service/target || true
+    - echo "==== PRINT REPORTS ===="
+    - find auth-service/target -name "*.txt" -exec cat {} \; || true
+    - exit 1
 
 # ================= DEPLOY =================
 deploy-job:
