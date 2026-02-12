@@ -32,7 +32,7 @@ build-job:
     - local
   script:
     - chmod +x mvnw
-    - ./mvnw clean package -DskipTests
+    - ./mvnw clean install -DskipTests
   artifacts:
     #Lưu file build được để stage sau dùng.
     paths:
