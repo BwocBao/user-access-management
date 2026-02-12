@@ -31,7 +31,6 @@ build-job:
   tags:
     - local
   script:
-    - cd user-access-management
     - chmod +x mvnw
     - ./mvnw clean install -DskipTests
   artifacts:
@@ -48,7 +47,6 @@ test-job:
   tags:
     - local
   before_script:
-    - cd user-access-management
     #postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
     - apt-get update && apt-get install -y postgresql-client curl
     #Tải script từ GitHub. Option:-s silent. -S show error. -L follow redirect. -o output file
