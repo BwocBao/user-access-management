@@ -1,9 +1,6 @@
 package com.r2s.user.integration;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.r2s.auth.dto.LoginRequest;
-import com.r2s.auth.dto.RegisterRoleRequest;
 import com.r2s.core.entity.Role;
 import com.r2s.core.entity.User;
 import com.r2s.core.repository.UserRepository;
