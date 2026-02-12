@@ -46,8 +46,6 @@ test-job:
   stage: test
   tags:
     - local
-  dependencies:
-    - build-job
   before_script:
     #postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
     - apt-get update && apt-get install -y postgresql-client curl
@@ -72,8 +70,7 @@ test-job:
     # KHÔNG clean nữa
     # Chỉ chạy test\
     - chmod +x mvnw
-    - ./mvnw test -pl auth-service -Dspring.datasource.url=jdbc:postgresql://postgres-db:5432/$AUTH_DB
-    - ./mvnw test -pl user-service -Dspring.datasource.url=jdbc:postgresql://postgres-db:5432/$USER_DB
+    - ./mvnw test
 
 # ================= DEPLOY =================
 deploy-job:
