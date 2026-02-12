@@ -36,8 +36,8 @@ build-job:
   artifacts:
     #Lưu file build được để stage sau dùng.
     paths:
-      - user-access-management/auth-service/target/*.jar
-      - user-access-management/user-service/target/*.jar
+      - auth-service/target/*.jar
+      - user-service/target/*.jar
     #Sau 1 giờ sẽ xóa.
     expire_in: 1 hour
 
@@ -70,7 +70,8 @@ test-job:
 
   script:
     # KHÔNG clean nữa
-    # Chỉ chạy test
+    # Chỉ chạy test\
+    - chmod +x mvnw
     - ./mvnw test -pl auth-service -Dspring.datasource.url=jdbc:postgresql://postgres-db:5432/$AUTH_DB
     - ./mvnw test -pl user-service -Dspring.datasource.url=jdbc:postgresql://postgres-db:5432/$USER_DB
 
