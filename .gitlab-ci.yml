@@ -32,7 +32,7 @@ build-job:
     - local
   script:
     - chmod +x mvnw
-    - ./mvnw clean install -DskipTests
+    - ./mvnw clean package -DskipTests
   artifacts:
     #Lưu file build được để stage sau dùng.
     paths:
@@ -46,6 +46,8 @@ test-job:
   stage: test
   tags:
     - local
+  dependencies:
+    - build-job
   before_script:
     #postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
     - apt-get update && apt-get install -y postgresql-client curl
@@ -67,9 +69,10 @@ test-job:
       done
 
   script:
-    - ./mvnw clean install -pl core -DskipTests
-    - ./mvnw clean test -pl auth-service -Dspring.datasource.url=jdbc:postgresql://postgres-db:5432/$AUTH_DB
-    - ./mvnw clean test -pl user-service -Dspring.datasource.url=jdbc:postgresql://postgres-db:5432/$USER_DB
+    # KHÔNG clean nữa
+    # Chỉ chạy test
+    - ./mvnw test -pl auth-service -Dspring.datasource.url=jdbc:postgresql://postgres-db:5432/$AUTH_DB
+    - ./mvnw test -pl user-service -Dspring.datasource.url=jdbc:postgresql://postgres-db:5432/$USER_DB
 
 # ================= DEPLOY =================
 deploy-job:
@@ -83,6 +86,8 @@ deploy-job:
   variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
+  dependencies:
+    - build-job
   only:
     - main
     - part-8
