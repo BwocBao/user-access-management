@@ -1,4 +1,4 @@
-image: maven:3.9.12-eclipse-temurin-17
+image: maven:3.9.6-eclipse-temurin-17
 
 services:
   #tương đương docker run postgres:15
@@ -44,11 +44,12 @@ build-job:
 # ================= TEST =================
 test-job:
   stage: test
+  image: maven:3.9.6-eclipse-temurin-17
   tags:
     - local
 
   services:
-    - name: docker:dind
+    - name: docker:24.0.7-dind
       alias: docker
     - name: postgres:15
       alias: postgres-db
@@ -56,6 +57,11 @@ test-job:
   variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+    TESTCONTAINERS_HOST_OVERRIDE: docker
+
+  before_script:
+    - docker info
 
   script:
     - chmod +x mvnw
