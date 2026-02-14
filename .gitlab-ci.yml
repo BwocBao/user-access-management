@@ -46,36 +46,54 @@ test-job:
   stage: test
   tags:
     - local
-  before_script:
-    #postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
-    - apt-get update && apt-get install -y postgresql-client curl
-    #Tải script từ GitHub. Option:-s silent. -S show error. -L follow redirect. -o output file
-    - curl -sSL https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -o wait-for-it.sh
-    - chmod +x wait-for-it.sh
-    #Chờ postgres-db port 5432. Timeout 60 giây
-    - ./wait-for-it.sh postgres-db:5432 -t 60 -- echo "postgres-db is up"
 
-    # Tạo DB nếu chưa tồn tại
-    - export PGPASSWORD=$POSTGRES_PASSWORD
-    #-h postgres-db → connect tới service postgres. -U → user. -t → chỉ output kết quả. -c → chạy câu lệnh SQL
-    #Nếu select ra 1 thì sẽ grep ra được và thoát ko tạo db. Ngược lại chưa có db thì tạo db
-    - |
-      for DB in "$AUTH_DB" "$USER_DB"; do
-        echo "Checking database $DB"
-        psql -h postgres-db -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$DB'" | grep -q 1 || \
-        psql -h postgres-db -U $POSTGRES_USER -c "CREATE DATABASE \"$DB\""
-      done
+  services:
+    - name: docker:dind
+      alias: docker
+    - name: postgres:15
+      alias: postgres-db
+
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
 
   script:
-    # KHÔNG clean nữa
-    # Chỉ chạy test\
     - chmod +x mvnw
-    - ./mvnw test -e || true
-    - echo "==== LIST REPORT FILES ===="
-    - ls -R auth-service/target || true
-    - echo "==== PRINT REPORTS ===="
-    - find auth-service/target -name "*.txt" -exec cat {} \; || true
-    - exit 1
+    - ./mvnw test
+#test-job:
+#  stage: test
+#  tags:
+#    - local
+#  before_script:
+#    #postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
+#    - apt-get update && apt-get install -y postgresql-client curl
+#    #Tải script từ GitHub. Option:-s silent. -S show error. -L follow redirect. -o output file
+#    - curl -sSL https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -o wait-for-it.sh
+#    - chmod +x wait-for-it.sh
+#    #Chờ postgres-db port 5432. Timeout 60 giây
+#    - ./wait-for-it.sh postgres-db:5432 -t 60 -- echo "postgres-db is up"
+#
+#    # Tạo DB nếu chưa tồn tại
+#    - export PGPASSWORD=$POSTGRES_PASSWORD
+#    #-h postgres-db → connect tới service postgres. -U → user. -t → chỉ output kết quả. -c → chạy câu lệnh SQL
+#    #Nếu select ra 1 thì sẽ grep ra được và thoát ko tạo db. Ngược lại chưa có db thì tạo db
+#    - |
+#      for DB in "$AUTH_DB" "$USER_DB"; do
+#        echo "Checking database $DB"
+#        psql -h postgres-db -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$DB'" | grep -q 1 || \
+#        psql -h postgres-db -U $POSTGRES_USER -c "CREATE DATABASE \"$DB\""
+#      done
+#
+#  script:
+#    # KHÔNG clean nữa
+#    # Chỉ chạy test\
+#    - chmod +x mvnw
+#    - ./mvnw test -e || true
+#    - echo "==== LIST REPORT FILES ===="
+#    - ls -R auth-service/target || true
+#    - echo "==== PRINT REPORTS ===="
+#    - find auth-service/target -name "*.txt" -exec cat {} \; || true
+#    - exit 1
 
 # ================= DEPLOY =================
 deploy-job:
