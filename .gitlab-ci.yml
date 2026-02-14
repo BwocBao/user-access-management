@@ -60,9 +60,6 @@ test-job:
     DOCKER_DRIVER: overlay2
     TESTCONTAINERS_HOST_OVERRIDE: docker
 
-  before_script:
-    - docker info
-
   script:
     - chmod +x mvnw
     - ./mvnw test
