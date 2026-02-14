@@ -1,11 +1,16 @@
 com\r2s\core\entity\User$UserBuilder.class
+com\r2s\core\exception\UnAuthorizedException.class
+com\r2s\core\exception\ForbiddenException.class
+com\r2s\core\dto\ApiResponse$ApiResponseBuilder.class
 com\r2s\core\security\JwtUtil.class
+com\r2s\core\dto\ApiResponse.class
 com\r2s\core\config\SecurityConstants.class
 com\r2s\core\repository\UserRepository.class
 com\r2s\core\config\SwaggerConfig.class
 com\r2s\core\exception\GlobalExceptionHandler.class
 com\r2s\core\security\JwtFilter.class
 com\r2s\core\entity\Role.class
+com\r2s\core\exception\ResourceNotFoundExecption.class
 com\r2s\core\exception\CustomException.class
 com\r2s\core\entity\User.class
 com\r2s\core\security\CustomUserDetailsService.class

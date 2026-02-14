@@ -1,0 +1,14 @@
+com\r2s\auth\controller\AuthController.class
+com\r2s\auth\dto\RegisterRequest$RegisterRequestBuilder.class
+com\r2s\auth\dto\AuthResponse$AuthResponseBuilder.class
+com\r2s\auth\AuthServiceApplication.class
+com\r2s\auth\config\JpaConfig.class
+com\r2s\auth\dto\AuthResponse.class
+com\r2s\auth\config\SecurityConfig.class
+com\r2s\auth\service\AuthService.class
+com\r2s\auth\dto\LoginRequest$LoginRequestBuilder.class
+com\r2s\auth\dto\RegisterRoleRequest.class
+com\r2s\auth\dto\RegisterRoleRequest$RegisterRoleRequestBuilder.class
+com\r2s\auth\dto\RegisterRequest.class
+com\r2s\auth\dto\LoginRequest.class
+com\r2s\auth\controller\RoleController.class
