@@ -36,7 +36,6 @@ build-job:
   artifacts:
     #Lưu file build được để stage sau dùng.
     paths:
-      - target/surefire-reports/*.xml
       - auth-service/target/*.jar
       - user-service/target/*.jar
     #Sau 1 giờ sẽ xóa.
@@ -68,7 +67,8 @@ test-job:
     when: always
     reports:
       junit:
-        - target/surefire-reports/*.xml
+        - auth-service/target/surefire-reports/*.xml
+        - user-service/target/surefire-reports/*.xml
 # ================= DEPLOY =================
 deploy-job:
   stage: deploy
@@ -91,6 +91,10 @@ deploy-job:
     - docker compose down || true
     # Build lại image + chạy lên
     - docker compose up -d --build
+
+
+
+
 
 
 #test-job:
@@ -127,13 +131,6 @@ deploy-job:
 #    - echo "==== PRINT REPORTS ===="
 #    - find auth-service/target -name "*.txt" -exec cat {} \; || true
 #    - exit 1
-
-
-
-
-
-
-
 
 
 
