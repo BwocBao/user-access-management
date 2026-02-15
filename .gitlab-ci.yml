@@ -63,6 +63,11 @@ test-job:
   script:
     - chmod +x mvnw
     - ./mvnw test
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - target/surefire-reports/*.xml
 # ================= DEPLOY =================
 deploy-job:
   stage: deploy
@@ -79,7 +84,7 @@ deploy-job:
     - build-job
   only:
     - main
-    - part-8
+    - part-9
   script:
     # Dừng stack cũ (nếu có)
     - docker compose down || true
