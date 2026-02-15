@@ -36,6 +36,7 @@ build-job:
   artifacts:
     #Lưu file build được để stage sau dùng.
     paths:
+      - target/surefire-reports/*.xml
       - auth-service/target/*.jar
       - user-service/target/*.jar
     #Sau 1 giờ sẽ xóa.
