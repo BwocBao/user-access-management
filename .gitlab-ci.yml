@@ -63,6 +63,30 @@ test-job:
   script:
     - chmod +x mvnw
     - ./mvnw test
+# ================= DEPLOY =================
+deploy-job:
+  stage: deploy
+  image: docker:24
+  services:
+    - name: docker:dind
+      alias: docker
+  tags:
+    - local
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  dependencies:
+    - build-job
+  only:
+    - main
+    - part-8
+  script:
+    # Dừng stack cũ (nếu có)
+    - docker compose down || true
+    # Build lại image + chạy lên
+    - docker compose up -d --build
+
+
 #test-job:
 #  stage: test
 #  tags:
@@ -98,28 +122,7 @@ test-job:
 #    - find auth-service/target -name "*.txt" -exec cat {} \; || true
 #    - exit 1
 
-# ================= DEPLOY =================
-deploy-job:
-  stage: deploy
-  image: docker:24
-  services:
-    - name: docker:dind
-      alias: docker
-  tags:
-    - local
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  dependencies:
-    - build-job
-  only:
-    - main
-    - part-8
-  script:
-    # Dừng stack cũ (nếu có)
-    - docker compose down || true
-    # Build lại image + chạy lên
-    - docker compose up -d --build
+
 
 
 
