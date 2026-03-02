@@ -1,22 +1,29 @@
 version: "3.9"
 
+# Anchor cho DB environment
+x-database-env: &database-env
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+# Anchor cho service chung
+x-service-env: &service-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE}
+  SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+  SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+  JWT_ACCESS_KEY: ${JWT_ACCESS_KEY}
+
 services:
 
-  postgres:
+  postgres-db:
     image: postgres:15
     container_name: postgres-db
-    restart: always
-
-    env_file:
-      - .env
-
+    #Container crash → restart. Reboot máy → restart. Nhưng nếu stop thủ công → nó nhớ trạng thái stop và không tự chạy lại
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-
+      <<: *database-env
+#      POSTGRES_DB: ${AUTH_DB}
     ports:
       - "55432:5432"
-
     volumes:
       #named volume:map volume postgres_data đã tạo ở câu lệnh dưới cùng vào trong container tại: /var/lib/postgresql/data
       - postgres_data:/var/lib/postgresql/data
@@ -25,72 +32,156 @@ services:
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     #Đợi DB READY rồi mới cho service start.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-    #Mỗi 5s test DB coi database sẵn sàng chưa
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      #Mỗi 5s test DB coi database sẵn sàng chưa
       interval: 5s
-    #Nếu 5s ko trả lời thì fail
+      #Nếu 5s ko trả lời thì fail
       timeout: 5s
-    #Fail 5 lần → container = unhealthy. Lúc này các service depends_on database sẽ ko chạy đc
+      #Fail 5 lần → container = unhealthy. Lúc này các service depends_on database sẽ ko chạy đc
       retries: 5
-
 
   auth-service:
     build:
-      context: .
-      dockerfile: auth-service/Dockerfile
+      context: ./auth-service
+      dockerfile: Dockerfile
     container_name: auth-service
-    #Crash → tự restart.
-    restart: always
-
-    env_file:
-      - .env
-
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE}
-
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${AUTH_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-
-      JWT_ACCESS_KEY: ${JWT_ACCESS_KEY}
-
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${AUTH_DB}
     ports:
       - "8081:8081"
-
     depends_on:
-      postgres:
+      postgres-db:
         condition: service_healthy
-
 
   user-service:
     build:
-      context: .
-      dockerfile: user-service/Dockerfile
-    restart: always
-
-    env_file:
-      - .env
-
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE}
-
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${USER_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-
-      JWT_ACCESS_KEY: ${JWT_ACCESS_KEY}
-
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${USER_DB}
     ports:
       - "8082:8082"
-
     depends_on:
-      postgres:
+      postgres-db:
         condition: service_healthy
 
-#Tạo volume trong docker, docker tự quản lý chỗ lưu mình ko cần quan tâm
-#Giống mình chạy lệnh docker volume create postgres_data
 volumes:
   postgres_data:
+    name: uam_postgres_data
+
+
+
+# start ≠ ready
+#Ví dụ thực tế:
+#  Docker start container Postgres
+#  Postgres cần 3–5 giây để init
+#  Trong lúc đó auth-service đã start
+#  Spring Boot connect DB
+#  ❌ Connection refused
+#  👉 Vì DB chưa ready.
+
+
+
+
+
+
+#version: "3.9"
+#
+#services:
+#
+#  postgres:
+#    image: postgres:15
+#    container_name: postgres-db
+#    #Container dừng → restart. Reboot máy → restart. Bạn stop → vẫn có thể restart khi Docker daemon khởi động lại
+#    restart: always
+#
+#    env_file:
+#      - .env
+#
+#    environment:
+#      POSTGRES_USER: ${POSTGRES_USER}
+#      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#
+#    ports:
+#      - "55432:5432"
+#
+#    volumes:
+#      #named volume:map volume postgres_data đã tạo ở câu lệnh dưới cùng vào trong container tại: /var/lib/postgresql/data
+#      - postgres_data:/var/lib/postgresql/data
+#      #Bind mount: gắn file init.sql ở máy vào docker ở /docker-entrypoint-initdb.d/init.sql vì thư mục /docker-entrypoint-initdb.d
+#      #trong postgres nên nó sẽ có cơ chế hoạt động là khi chưa có database nó sẽ chạy init.sql còn nếu có sẽ ko chạy nx
+#      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+#    #Đợi DB READY rồi mới cho service start.
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U postgres"]
+#    #Mỗi 5s test DB coi database sẵn sàng chưa
+#      interval: 5s
+#    #Nếu 5s ko trả lời thì fail
+#      timeout: 5s
+#    #Fail 5 lần → container = unhealthy. Lúc này các service depends_on database sẽ ko chạy đc
+#      retries: 5
+#
+#
+#  auth-service:
+#    build:
+#      context: .
+#      dockerfile: auth-service/Dockerfile
+#    container_name: auth-service
+#    #Crash → tự restart.
+#    restart: always
+#
+#    env_file:
+#      - .env
+#
+#    environment:
+#      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE}
+#
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${AUTH_DB}
+#      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+#      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+#
+#      JWT_ACCESS_KEY: ${JWT_ACCESS_KEY}
+#
+#    ports:
+#      - "8081:8081"
+#
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#
+#
+#  user-service:
+#    build:
+#      context: .
+#      dockerfile: user-service/Dockerfile
+#    restart: always
+#
+#    env_file:
+#      - .env
+#
+#    environment:
+#      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE}
+#
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${USER_DB}
+#      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+#      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+#
+#      JWT_ACCESS_KEY: ${JWT_ACCESS_KEY}
+#
+#    ports:
+#      - "8082:8082"
+#
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#
+##Tạo volume trong docker, docker tự quản lý chỗ lưu mình ko cần quan tâm
+##Giống mình chạy lệnh docker volume create postgres_data
+#volumes:
+#  postgres_data:
 
 
 

@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
+import com.r2s.auth.entity.AuthType;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -15,6 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -27,207 +30,383 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
-public class AuthControllerIntegrationTest {
+class AuthControllerIntegrationTest {
+
+    private static final String API = "/api/auth";
+
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ObjectMapper objectMapper;
 
-//  Trước khi chạy MỖI test case → xóa sạch dữ liệu trong DB. Vẫn tái sử dụng docker container
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @BeforeEach
-    void cleanDatabase() {
-        jdbcTemplate.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
-    }
     // ============================
     // PostgreSQL Container
     // ============================
-    @Container//Nói với JUnit:"Thằng này là container→tự start/stop cho tao".Không cần viết:postgres.start();/postgres.stop();
+    @Container
     static PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgres:16-alpine")
                     .withDatabaseName("test_db")
                     .withUsername("postgres")
                     .withPassword("123456");
 
-    // ============================
-    // Inject DB config cho Spring
-    // ============================
-    //URL, port… đều RANDOM mỗi lần chạy. Không thể hardcode.
-    @DynamicPropertySource//Để inject runtime config.Chạy trước khi Spring Context init.Override application.yml.
+    @DynamicPropertySource
     static void overrideProps(DynamicPropertyRegistry registry) {
-
-        registry.add("spring.datasource.url",
-                postgres::getJdbcUrl);
-
-        registry.add("spring.datasource.username",
-                postgres::getUsername);
-
-        registry.add("spring.datasource.password",
-                postgres::getPassword);
-
-        registry.add("spring.jpa.hibernate.ddl-auto",
-                () -> "update");
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
 
-    // ============================
-    // TEST HELLO
-    // ============================
-    @Test
-    void ping_shouldReturnHello() throws Exception {
-
-        mockMvc.perform(get("/api/auth/hello"))
-                .andExpect(status().isOk())
-                .andExpect(content()
-                        .string("Hello from Auth Service"));
+    @BeforeEach
+    void cleanDatabase() {
+        jdbcTemplate.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
     }
 
+    // =====================================================
+    // HELPER METHODS  (DRY - Không lặp code)
+    // =====================================================
 
-    // ============================
-    // TEST REGISTER
-    // ============================
-    @Test
-    void register_shouldReturn200_whenValid() throws Exception {
-
-        RegisterRequest request = new RegisterRequest();
-        request.setUsername("bwocbao");
-        request.setPassword("123456");
-
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message")
-                        .value("User registered successfully"))
-                .andExpect(jsonPath("$.data").isEmpty());
-
-    }
-
-    @Test
-    void regiser_shouldReturn400_whenInvalid() throws Exception {
-        RegisterRequest request = new RegisterRequest();
-        request.setUsername("");
-        request.setPassword("");
-
-        mockMvc.perform(post("/api/auth/register")
+    private ResultActions register(String username, String password) throws Exception {
+        RegisterRequest request = RegisterRequest.builder()
+                .username(username)
+                .password(password)
+                .build();
+        return mockMvc.perform(post(API + "/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
+                .content(objectMapper.writeValueAsString(request)));
     }
 
-    @Test
-    void registerRole_shouldReturn200_whenValid() throws Exception {
+    private ResultActions login(String username, String password) throws Exception {
+        LoginRequest request = LoginRequest.builder()
+                .username(username)
+                .password(password)
+                .type(AuthType.USERNAME_PASSWORD)
+                .build();
 
-        RegisterRoleRequest request = new RegisterRoleRequest();
-        request.setUsername("bwocbao");
-        request.setPassword("123456");
-        request.setRole("Role_Admin");
-
-        mockMvc.perform(post("/api/auth/register/role")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message")
-                        .value("User registered successfully"))
-                .andExpect(jsonPath("$.data").isEmpty());
-
-    }
-
-    @Test
-    void registerRole_shouldReturn400_whenRoleInvalid() throws Exception {
-
-        RegisterRoleRequest request = new RegisterRoleRequest();
-        request.setUsername("bwocbao");
-        request.setPassword("123456");
-        request.setRole("Role_superman");
-
-        mockMvc.perform(post("/api/auth/register/role")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().string("Invalid role"));
-
-    }
-
-    // ============================
-    // TEST LOGIN
-    // ============================
-    @Test
-    void login_shouldReturn200_whenValid() throws Exception {
-
-        // 1. Register trước
-        RegisterRequest register = new RegisterRequest();
-        register.setUsername("bwocbao");
-        register.setPassword("123456");
-
-        mockMvc.perform(post("/api/auth/register")
+        return mockMvc.perform(post(API + "/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(register)));
-
-
-        // 2. Login
-        LoginRequest login = new LoginRequest();
-        login.setUsername("bwocbao");
-        login.setPassword("123456");
-
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(login)))
-
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message")
-                        .value("User logged successfully"))
-                .andExpect(jsonPath("$.data.token")
-                        .exists());
+                .content(objectMapper.writeValueAsString(request)));
     }
 
-    @Test
-    void login_shouldReturn401_whenUsernameNotExist() throws Exception {
-        // 1. Login
-        LoginRequest login = new LoginRequest();
-        login.setUsername("bwocbao");
-        login.setPassword("123456");
+    // =====================================================
+    // HELLO TEST
+    // =====================================================
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(login)))
+    @Nested
+    class HelloTests {
 
-                .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Username does not exist"));
+        @Test
+        void shouldReturnHello() throws Exception {
+            mockMvc.perform(get(API + "/hello"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string("Hello from Auth Service"));
+        }
     }
 
-    @Test
-    void login_shouldReturn401_whenWrongPass() throws Exception {
+    // =====================================================
+    // REGISTER TESTS
+    // =====================================================
 
-        // 1. Register trước
-        RegisterRequest register = new RegisterRequest();
-        register.setUsername("bwocbao");
-        register.setPassword("123456");
+    @Nested
+    class RegisterTests {
 
-        mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(register)));
+        @Test
+        void shouldReturn200_whenValid() throws Exception {
 
+            register("bwocbao", "123456").andExpect(status().isOk());
 
-        // 2. Login
-        LoginRequest login = new LoginRequest();
-        login.setUsername("bwocbao");
-        login.setPassword("123457");
+        }
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(login)))
+        @Test
+        void shouldReturn400_whenInvalid() throws Exception {
+            register("", "").andExpect(status().isBadRequest());
 
-                .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Wrong password"));
+        }
     }
 
+    // =====================================================
+    // LOGIN TESTS
+    // =====================================================
+
+    @Nested
+    class LoginTests {
+
+        @Test
+        void shouldReturnToken_whenValid() throws Exception {
+
+            register("bwocbao", "123456");
+
+            login("bwocbao", "123456")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value(200))
+                    .andExpect(jsonPath("$.data.token").exists());
+        }
+
+        @Test
+        void shouldReturn401_whenUserNotExist() throws Exception {
+
+            login("notexist", "123456")
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(content().string("Username not found"));
+        }
+
+        @Test
+        void shouldReturn401_whenWrongPassword() throws Exception {
+
+            register("bwocbao", "123456");
+
+            login("bwocbao", "wrongpass")
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(content().string("Wrong password"));
+        }
+    }
+
+    // =====================================================
+    // REGISTER ROLE TESTS
+    // =====================================================
+
+    @Nested
+    class RegisterRoleTests {
+
+        @Test
+        void shouldReturn200_whenRoleValid() throws Exception {
+
+            RegisterRoleRequest request = new RegisterRoleRequest();
+            request.setUsername("admin");
+            request.setPassword("123456");
+            request.setRole("ROLE_ADMIN");
+
+            mockMvc.perform(post(API + "/register/role")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        void shouldReturn400_whenRoleInvalid() throws Exception {
+
+            RegisterRoleRequest request = new RegisterRoleRequest();
+            request.setUsername("admin");
+            request.setPassword("123456");
+            request.setRole("ROLE_SUPERMAN");
+
+            mockMvc.perform(post(API + "/register/role")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().string("Invalid role"));
+        }
+    }
 }
+//@SpringBootTest
+//@AutoConfigureMockMvc
+//@Testcontainers
+//@ActiveProfiles("test")
+//public class AuthControllerIntegrationTest {
+//    @Autowired
+//    private MockMvc mockMvc;
+//
+//    @Autowired
+//    private ObjectMapper objectMapper;
+//
+////  Trước khi chạy MỖI test case → xóa sạch dữ liệu trong DB. Vẫn tái sử dụng docker container
+//    @Autowired
+//    private JdbcTemplate jdbcTemplate;
+//
+//    @BeforeEach
+//    void cleanDatabase() {
+//        jdbcTemplate.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
+//    }
+//    // ============================
+//    // PostgreSQL Container
+//    // ============================
+//    @Container//Nói với JUnit:"Thằng này là container→tự start/stop cho tao".Không cần viết:postgres.start();/postgres.stop();
+//    static PostgreSQLContainer<?> postgres =
+//            new PostgreSQLContainer<>("postgres:16-alpine")
+//                    .withDatabaseName("test_db")
+//                    .withUsername("postgres")
+//                    .withPassword("123456");
+//
+//    // ============================
+//    // Inject DB config cho Spring
+//    // ============================
+//    //URL, port… đều RANDOM mỗi lần chạy. Không thể hardcode.
+//    @DynamicPropertySource//Để inject runtime config.Chạy trước khi Spring Context init.Override application.yml.
+//    static void overrideProps(DynamicPropertyRegistry registry) {
+//
+//        registry.add("spring.datasource.url",
+//                postgres::getJdbcUrl);
+//
+//        registry.add("spring.datasource.username",
+//                postgres::getUsername);
+//
+//        registry.add("spring.datasource.password",
+//                postgres::getPassword);
+//
+//        registry.add("spring.jpa.hibernate.ddl-auto",
+//                () -> "update");
+//    }
+//
+//    // ============================
+//    // TEST HELLO
+//    // ============================
+//    @Test
+//    void ping_shouldReturnHello() throws Exception {
+//
+//        mockMvc.perform(get("/api/auth/hello"))
+//                .andExpect(status().isOk())
+//                .andExpect(content()
+//                        .string("Hello from Auth Service"));
+//    }
+//
+//
+//    // ============================
+//    // TEST REGISTER
+//    // ============================
+//    @Test
+//    void register_shouldReturn200_whenValid() throws Exception {
+//
+//        RegisterRequest request = new RegisterRequest();
+//        request.setUsername("bwocbao");
+//        request.setPassword("123456");
+//
+//        mockMvc.perform(post("/api/auth/register")
+//                        .contentType(MediaType.APPLICATION_JSON)
+//                        .content(objectMapper.writeValueAsString(request)))
+//                .andExpect(status().isOk())
+//                .andExpect(jsonPath("$.status").value(200))
+//                .andExpect(jsonPath("$.message")
+//                        .value("User registered successfully"))
+//                .andExpect(jsonPath("$.data").isEmpty());
+//
+//    }
+//
+//    @Test
+//    void regiser_shouldReturn400_whenInvalid() throws Exception {
+//        RegisterRequest request = new RegisterRequest();
+//        request.setUsername("");
+//        request.setPassword("");
+//
+//        mockMvc.perform(post("/api/auth/register")
+//                .contentType(MediaType.APPLICATION_JSON)
+//                .content(objectMapper.writeValueAsString(request)))
+//                .andExpect(status().isBadRequest());
+//    }
+//
+//    @Test
+//    void registerRole_shouldReturn200_whenValid() throws Exception {
+//
+//        RegisterRoleRequest request = new RegisterRoleRequest();
+//        request.setUsername("bwocbao");
+//        request.setPassword("123456");
+//        request.setRole("Role_Admin");
+//
+//        mockMvc.perform(post("/api/auth/register/role")
+//                        .contentType(MediaType.APPLICATION_JSON)
+//                        .content(objectMapper.writeValueAsString(request)))
+//                .andExpect(status().isOk())
+//                .andExpect(jsonPath("$.status").value(200))
+//                .andExpect(jsonPath("$.message")
+//                        .value("User registered successfully"))
+//                .andExpect(jsonPath("$.data").isEmpty());
+//
+//    }
+//
+//    @Test
+//    void registerRole_shouldReturn400_whenRoleInvalid() throws Exception {
+//
+//        RegisterRoleRequest request = new RegisterRoleRequest();
+//        request.setUsername("bwocbao");
+//        request.setPassword("123456");
+//        request.setRole("Role_superman");
+//
+//        mockMvc.perform(post("/api/auth/register/role")
+//                        .contentType(MediaType.APPLICATION_JSON)
+//                        .content(objectMapper.writeValueAsString(request)))
+//                .andExpect(status().isBadRequest())
+//                .andExpect(content().string("Invalid role"));
+//
+//    }
+//
+//    // ============================
+//    // TEST LOGIN
+//    // ============================
+//    @Test
+//    void login_shouldReturn200_whenValid() throws Exception {
+//
+//        // 1. Register trước
+//        RegisterRequest register = new RegisterRequest();
+//        register.setUsername("bwocbao");
+//        register.setPassword("123456");
+//
+//        mockMvc.perform(post("/api/auth/register")
+//                .contentType(MediaType.APPLICATION_JSON)
+//                .content(objectMapper.writeValueAsString(register)));
+//
+//
+//        // 2. Login
+//        LoginRequest login = new LoginRequest();
+//        login.setUsername("bwocbao");
+//        login.setPassword("123456");
+//
+//        mockMvc.perform(post("/api/auth/login")
+//                        .contentType(MediaType.APPLICATION_JSON)
+//                        .content(objectMapper.writeValueAsString(login)))
+//
+//                .andExpect(status().isOk())
+//                .andExpect(jsonPath("$.status").value(200))
+//                .andExpect(jsonPath("$.message")
+//                        .value("User logged successfully"))
+//                .andExpect(jsonPath("$.data.token")
+//                        .exists());
+//    }
+//
+//    @Test
+//    void login_shouldReturn401_whenUsernameNotExist() throws Exception {
+//        // 1. Login
+//        LoginRequest login = new LoginRequest();
+//        login.setUsername("bwocbao");
+//        login.setPassword("123456");
+//
+//        mockMvc.perform(post("/api/auth/login")
+//                        .contentType(MediaType.APPLICATION_JSON)
+//                        .content(objectMapper.writeValueAsString(login)))
+//
+//                .andExpect(status().isUnauthorized())
+//                .andExpect(content().string("Username does not exist"));
+//    }
+//
+//    @Test
+//    void login_shouldReturn401_whenWrongPass() throws Exception {
+//
+//        // 1. Register trước
+//        RegisterRequest register = new RegisterRequest();
+//        register.setUsername("bwocbao");
+//        register.setPassword("123456");
+//
+//        mockMvc.perform(post("/api/auth/register")
+//                .contentType(MediaType.APPLICATION_JSON)
+//                .content(objectMapper.writeValueAsString(register)));
+//
+//
+//        // 2. Login
+//        LoginRequest login = new LoginRequest();
+//        login.setUsername("bwocbao");
+//        login.setPassword("123457");
+//
+//        mockMvc.perform(post("/api/auth/login")
+//                        .contentType(MediaType.APPLICATION_JSON)
+//                        .content(objectMapper.writeValueAsString(login)))
+//
+//                .andExpect(status().isUnauthorized())
+//                .andExpect(content().string("Wrong password"));
+//    }
+//
+//}
 //1️⃣ JUnit tạo object test như thế nào?
 //JUnit KHÔNG dùng 1 object test cho tất cả @Test.
 //Mặc định: 👉 Mỗi @Test = 1 instance mới.

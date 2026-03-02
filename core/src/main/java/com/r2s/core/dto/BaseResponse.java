@@ -1,6 +1,5 @@
 package com.r2s.core.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,7 +12,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 //@JsonInclude(JsonInclude.Include.NON_NULL) // trường nào null thì nó ko hiện
-public class ApiResponse<T> {
+public class BaseResponse<T> {
 
     private int status;
     private String message;
@@ -22,9 +21,9 @@ public class ApiResponse<T> {
 
     // ===== Factory methods =====
 
-    public static <T> ApiResponse<T> success(T data, String message) {
+    public static <T> BaseResponse<T> success(T data, String message) {
 
-        return ApiResponse.<T>builder()
+        return BaseResponse.<T>builder()
                 .status(200)
                 .message(message)
                 .data(data)
@@ -32,9 +31,9 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    public static <T> ApiResponse<T> created(T data, String message) {
+    public static <T> BaseResponse<T> created(T data, String message) {
 
-        return ApiResponse.<T>builder()
+        return BaseResponse.<T>builder()
                 .status(204)
                 .message(message)
                 .data(data)
@@ -42,9 +41,9 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    public static <T> ApiResponse<T> error(int status, String message) {
+    public static <T> BaseResponse<T> error(int status, String message) {
 
-        return ApiResponse.<T>builder()
+        return BaseResponse.<T>builder()
                 .status(status)
                 .message(message)
                 .time(LocalDateTime.now())
