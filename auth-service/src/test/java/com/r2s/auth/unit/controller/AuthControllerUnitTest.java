@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -62,8 +61,7 @@ class AuthControllerUnitTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
                 .andExpect(jsonPath("$.message")
-                        .value("User registered successfully"))
-                .andExpect(jsonPath("$.data").isEmpty());
+                        .value("User registered successfully"));
 
         verify(authService).register(any(RegisterRequest.class));
     }
@@ -79,8 +77,8 @@ class AuthControllerUnitTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.username").value("Username is required"))
-                .andExpect(jsonPath("$.password").value("Password is required"));
+                .andExpect(jsonPath("$.data.username").value("Username is required"))
+                .andExpect(jsonPath("$.data.password").value("Password is required"));
 
         verifyNoInteractions(authService);
     }
@@ -139,8 +137,7 @@ class AuthControllerUnitTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message").value("User registered successfully"))
-                .andExpect(jsonPath("$.data").isEmpty());
+                .andExpect(jsonPath("$.message").value("User registered successfully"));
 
         verify(authService).registerRole(any(RegisterRoleRequest.class));
     }
@@ -157,9 +154,9 @@ class AuthControllerUnitTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.username").value("Username is required"))
-                .andExpect(jsonPath("$.password").value("Password is required"))
-                        .andExpect(jsonPath("$.role").value("Role is required"));
+                .andExpect(jsonPath("$.data.username").value("Username is required"))
+                .andExpect(jsonPath("$.data.password").value("Password is required"))
+                .andExpect(jsonPath("$.data.role").value("Role is required"));
 
 
         verifyNoInteractions(authService);

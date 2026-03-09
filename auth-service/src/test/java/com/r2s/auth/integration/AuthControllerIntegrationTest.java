@@ -101,13 +101,12 @@ public class AuthControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
                 .andExpect(jsonPath("$.message")
-                        .value("User registered successfully"))
-                .andExpect(jsonPath("$.data").isEmpty());
+                        .value("User registered successfully"));
 
     }
 
     @Test
-    void regiser_shouldReturn400_whenInvalid() throws Exception {
+    void register_shouldReturn400_whenInvalid() throws Exception {
         RegisterRequest request = new RegisterRequest();
         request.setUsername("");
         request.setPassword("");
@@ -132,8 +131,7 @@ public class AuthControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
                 .andExpect(jsonPath("$.message")
-                        .value("User registered successfully"))
-                .andExpect(jsonPath("$.data").isEmpty());
+                        .value("User registered successfully"));
 
     }
 
@@ -149,7 +147,9 @@ public class AuthControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string("Invalid role"));
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message")
+                        .value("Invalid role"));
 
     }
 
@@ -198,7 +198,9 @@ public class AuthControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(login)))
 
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Username does not exist"));
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message")
+                        .value("Username does not exist"));
     }
 
     @Test
@@ -224,7 +226,9 @@ public class AuthControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(login)))
 
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Wrong password"));
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message")
+                        .value("Wrong password"));
     }
 
 }

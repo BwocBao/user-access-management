@@ -99,7 +99,7 @@ class UserControllerIntegrationTest {
     void getAllUsers_shouldReturn403_whenUser() throws Exception {
 
 
-        String token = generateToken("user", "ROLE_USer");
+        String token = generateToken("user", "ROLE_USER");
 
         mockMvc.perform(get("/api/users")
                         .header("Authorization", "Bearer " + token))

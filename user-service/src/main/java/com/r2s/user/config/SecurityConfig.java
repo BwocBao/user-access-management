@@ -1,10 +1,14 @@
 package com.r2s.user.config;
 
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.r2s.core.dto.ApiResponse;
 import com.r2s.core.security.JwtFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -20,7 +24,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final JwtFilter jwtFilter;
-
+    private final ObjectMapper objectMapper;
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception{
         http
@@ -32,8 +36,41 @@ public class SecurityConfig {
                         authorizeRequests ->
                                 authorizeRequests
                                         .requestMatchers("/api/auth/**","/api/users/hello").permitAll()
-                                        .anyRequest().authenticated());
-        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                                        .anyRequest().authenticated())
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((req, res, e) -> {
+
+                            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            res.setContentType("application/json");
+
+                            ApiResponse<?> response =
+                                    ApiResponse.error(
+                                            HttpStatus.UNAUTHORIZED.value(),
+                                            "Unauthorized or token missing or invalid",
+                                            null
+                                    );
+
+                            objectMapper.writeValue(res.getOutputStream(), response);
+                            res.flushBuffer();
+
+                        })
+                        .accessDeniedHandler((req, res, e) -> {
+
+                            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            res.setContentType("application/json");
+
+                            ApiResponse<?> response =
+                                    ApiResponse.error(
+                                            HttpStatus.FORBIDDEN.value(),
+                                            "Forbidden: not enough permissions",
+                                            null
+                                    );
+
+                            objectMapper.writeValue(res.getOutputStream(), response);
+                            res.flushBuffer();
+
+                        })
+                );
         return http.build();
     }
 

@@ -1,0 +1,33 @@
+management:
+
+  server:
+    port: 8888
+
+  endpoints:
+    web:
+      base-path: /internal/actuator
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+
+  endpoint:
+    health:
+      show-details: never
+
+  metrics:
+    tags:
+      application: user-service
+
+logging:
+  level:
+    root: INFO
+
+spring:
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-//@JsonInclude(JsonInclude.Include.NON_NULL) // trường nào null thì nó ko hiện
+@JsonInclude(JsonInclude.Include.NON_NULL) // trường nào null thì nó ko hiện
 public class ApiResponse<T> {
 
     private int status;
@@ -35,18 +35,18 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> created(T data, String message) {
 
         return ApiResponse.<T>builder()
-                .status(204)
+                .status(201)
                 .message(message)
                 .data(data)
                 .time(LocalDateTime.now())
                 .build();
     }
 
-    public static <T> ApiResponse<T> error(int status, String message) {
-
+    public static <T> ApiResponse<T> error(int status, String message, T data) {
         return ApiResponse.<T>builder()
                 .status(status)
                 .message(message)
+                .data(data)
                 .time(LocalDateTime.now())
                 .build();
     }

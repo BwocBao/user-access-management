@@ -2,7 +2,7 @@ package com.r2s.user.unit.service;
 
 import com.r2s.core.entity.Role;
 import com.r2s.core.entity.User;
-import com.r2s.core.exception.ResourceNotFoundExecption;
+import com.r2s.core.exception.ResourceNotFoundException;
 import com.r2s.core.repository.UserRepository;
 import com.r2s.user.dto.UpdateUserRequest;
 import com.r2s.user.dto.UserResponse;
@@ -259,7 +259,7 @@ class UserServiceUnitTest {
         // Act + Assert
         assertThatThrownBy(() ->
                 userService.deleteUserByUsername(user1.getUsername()))
-                .isInstanceOf(ResourceNotFoundExecption.class)
+                .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("User not found: " + user1.getUsername());
 
         verify(userRepository).existsByUsername(user1.getUsername());
