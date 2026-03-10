@@ -1,5 +1,4 @@
 management:
-
   server:
     port: 8888
 
@@ -19,11 +18,13 @@ management:
 
 logging:
   level:
-    root: INFO
+    root: WARN
+    org.springframework.web: WARN
+    org.hibernate: ERROR
 
 spring:
-
   lifecycle:
+    #Chờ request thêm 30s trước khi shutdown nếu ko shutdown liền sẽ bị mất request
     timeout-per-shutdown-phase: 30s
 
 springdoc:

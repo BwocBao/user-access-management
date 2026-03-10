@@ -1,14 +1,59 @@
 <configuration>
 
-    <!-- console appender -->
+    <!-- ===================================================== -->
+    <!-- CONSOLE APPENDER                                      -->
+    <!-- ===================================================== -->
+    <!--
+        Appender này dùng để log ra console (terminal / docker logs)
+
+        Trong production container (Docker/Kubernetes),
+        log thường được collect từ STDOUT nên console log rất quan trọng.
+    -->
     <appender name="CONSOLE"
               class="ch.qos.logback.core.ConsoleAppender">
 
-        <encoder
-                class="net.logstash.logback.encoder.LogstashEncoder">
+        <!--
+            Encoder quyết định format của log.
 
+            LogstashEncoder → log dạng JSON
+            giúp dễ parse bởi các log system như:
+            - :contentReference[oaicite:0]{index=0}
+            - :contentReference[oaicite:1]{index=1}
+            - :contentReference[oaicite:2]{index=2}
+            - :contentReference[oaicite:3]{index=3}
+        -->
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+
+            <!--
+                includeMdc=true
+
+                Cho phép log tự động include tất cả key/value
+                được đặt trong MDC (Mapped Diagnostic Context).
+
+                Ví dụ trong code:
+
+                MDC.put("requestId", "abc123");
+                MDC.put("user", "admin");
+
+                Log JSON sẽ tự có:
+
+                "requestId": "abc123"
+                "user": "admin"
+            -->
             <includeMdc>true</includeMdc>
 
+            <!--
+                customFields thêm field cố định vào mọi log.
+
+                Ở đây dùng để xác định service name
+                khi hệ thống có nhiều microservice.
+
+                Ví dụ:
+
+                auth-service
+                user-service
+                order-service
+            -->
             <customFields>
                 {
                 "service":"auth-service"
@@ -20,35 +65,115 @@
     </appender>
 
 
-    <!-- file appender -->
+    <!-- ===================================================== -->
+    <!-- FILE APPENDER                                         -->
+    <!-- ===================================================== -->
+    <!--
+        Appender này ghi log ra file trên server.
+
+        Dùng để:
+        - audit
+        - debug production
+        - backup log khi log collector lỗi
+    -->
     <appender name="FILE"
               class="ch.qos.logback.core.rolling.RollingFileAppender">
 
+        <!--
+            File log hiện tại.
+        -->
         <file>logs/app.log</file>
 
+        <!--
+            Rolling policy: tự động rotate log theo thời gian.
+        -->
         <rollingPolicy
                 class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
 
+            <!--
+                Mỗi ngày tạo file log mới.
+
+                Ví dụ:
+                logs/app.2026-03-10.log
+                logs/app.2026-03-11.log
+            -->
             <fileNamePattern>
                 logs/app.%d{yyyy-MM-dd}.log
             </fileNamePattern>
 
+            <!--
+                Chỉ giữ log trong 7 ngày
+                sau đó tự xóa để tránh đầy disk.
+            -->
             <maxHistory>7</maxHistory>
 
         </rollingPolicy>
 
-        <encoder
-                class="net.logstash.logback.encoder.LogstashEncoder"/>
+        <!--
+            File log cũng dùng JSON format giống console.
+        -->
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+
+            <!--
+                Bao gồm MDC (requestId, user, ip, ...)
+                để file log cũng có đầy đủ context.
+            -->
+            <includeMdc>true</includeMdc>
+
+        </encoder>
 
     </appender>
 
 
-    <!-- root logger -->
+    <!-- ===================================================== -->
+    <!-- ASYNC APPENDER                                        -->
+    <!-- ===================================================== -->
+    <!--
+        AsyncAppender giúp logging chạy bất đồng bộ.
 
-    <root level="INFO">
+        Nếu log ghi trực tiếp vào file/console,
+        thread xử lý request sẽ bị block.
 
+        AsyncAppender sử dụng queue riêng để xử lý log
+        giúp giảm latency của request.
+
+        Đây là best practice cho production system.
+    -->
+    <appender name="ASYNC"
+              class="ch.qos.logback.classic.AsyncAppender">
+
+        <!--
+            Tất cả log sẽ được gửi tới cả console và file.
+        -->
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
+
+    </appender>
+
+
+    <!-- ===================================================== -->
+    <!-- ROOT LOGGER                                           -->
+    <!-- ===================================================== -->
+    <!--
+        Root logger là logger gốc của toàn hệ thống.
+
+        level=INFO nghĩa là:
+
+        TRACE   -> bỏ
+        DEBUG   -> bỏ
+        INFO    -> log
+        WARN    -> log
+        ERROR   -> log
+
+        Production thường dùng INFO để tránh log quá nhiều.
+    -->
+    <root level="INFO">
+
+        <!--
+            Mọi log sẽ đi qua ASYNC appender
+            để đảm bảo logging không làm chậm request.
+        -->
+        <appender-ref ref="ASYNC"/>
 
     </root>
 

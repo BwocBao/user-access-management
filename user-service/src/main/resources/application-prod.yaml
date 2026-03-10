@@ -19,7 +19,9 @@ management:
 
 logging:
   level:
-    root: INFO
+    root: WARN
+    org.springframework.web: WARN
+    org.hibernate: ERROR
 
 spring:
 

@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -16,6 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -30,43 +32,56 @@ public class JwtFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        String authHeader = request.getHeader("Authorization");
+        String requestId = UUID.randomUUID().toString();
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+        MDC.put("requestId", requestId);
+        MDC.put("method", request.getMethod());
+        MDC.put("uri", request.getRequestURI());
+        MDC.put("ip", request.getRemoteAddr());
 
         try {
-            String token = authHeader.substring(7);
-            String username = jwtUtil.extractUsername(token);
-            String role = jwtUtil.extractRoles(token);
-            // Nếu chưa có Authentication trong SecurityContext thì set vào
-            if (username != null
-                    && SecurityContextHolder.getContext().getAuthentication() == null) {
 
+            String authHeader = request.getHeader("Authorization");
 
-                List<GrantedAuthority> authorities =
-                        List.of(new SimpleGrantedAuthority(role));
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                username, // principal
-                                null,
-                                authorities
-                        );
+                String token = authHeader.substring(7);
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                String username = jwtUtil.extractUsername(token);
+                String role = jwtUtil.extractRoles(token);
+
+                if (username != null &&
+                        SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                    List<GrantedAuthority> authorities =
+                            List.of(new SimpleGrantedAuthority(role));
+
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    username,
+                                    null,
+                                    authorities
+                            );
+
+                    SecurityContextHolder.getContext()
+                            .setAuthentication(authentication);
+
+                    MDC.put("user", username); // thêm user vào log
+                }
             }
 
+            filterChain.doFilter(request, response);
 
         } catch (Exception ex) {
+
             log.warn("JWT validation failed", ex);
-
             request.setAttribute("SECURITY_EXCEPTION", ex);
+
+            filterChain.doFilter(request, response);
+
+        } finally {
+
+            MDC.clear();
         }
-
-        filterChain.doFilter(request, response);
     }
-
 }

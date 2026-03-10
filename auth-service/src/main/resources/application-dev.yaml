@@ -18,17 +18,13 @@ spring:
         format_sql: true
 logging:
   level:
+    root: INFO
+    org.springframework.web: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
-  #  datasource:
-  #    url: jdbc:mysql://localhost:3306/userservice?useSSL=false
-  #    username: root
-  #    password: Bb0907976653
-  #
-  #  jpa:
-  #    hibernate:
-  #      ddl-auto: update
-  #    show-sql: true
-  #    properties:
-  #      hibernate:
-  #        dialect: org.hibernate.dialect.MySQLDialect
+    org.springframework.security: DEBUG
+#  Logger	                      Mục đích
+#  org.springframework.web	    debug request
+#  org.hibernate.SQL	          xem query
+#  org.hibernate.orm.jdbc.bind	  xem parameter
+#  org.springframework.security	  debug auth
