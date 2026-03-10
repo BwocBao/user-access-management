@@ -1,0 +1,19 @@
+# Maven
+target/
+!*/src/main/**/target/
+
+# jar
+*.jar
+*.war
+
+# logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
