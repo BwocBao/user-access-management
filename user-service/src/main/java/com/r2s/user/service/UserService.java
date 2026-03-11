@@ -1,13 +1,14 @@
 package com.r2s.user.service;
 
-import com.r2s.core.entity.Role;
-import com.r2s.core.entity.User;
 import com.r2s.core.exception.ResourceNotFoundException;
-import com.r2s.core.repository.UserRepository;
+import com.r2s.user.client.AuthServiceClient;
 import com.r2s.user.dto.UpdateUserRequest;
 import com.r2s.user.dto.UserResponse;
+import com.r2s.user.entity.UserProfile;
 import com.r2s.user.mapper.UserMapper;
+import com.r2s.user.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,8 +17,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class UserService {
-    private final UserRepository userRepository;
+    private final UserProfileRepository userRepository;
     private final UserMapper userMapper;
+    private final AuthServiceClient authServiceClient;
 
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll()
@@ -26,33 +28,19 @@ public class UserService {
                 .toList();
     }
 
-    public  UserResponse getUserByUsername(String username,String roleStr) {
-        Role role = Role.valueOf(roleStr); //ENUM
+    public UserResponse getUserByUsername(String username) {
 
-        User user = userRepository.findByUsername(username)
-                .orElseGet(() -> {
-                    User newUser = new User();
-                    newUser.setUsername(username);
-                    newUser.setRole(role);      //ENUM
-                    newUser.setFullName("");
-                    newUser.setEmail("");
-                    newUser.setPassword("");
-                    return userRepository.save(newUser);
-                });
-        return userMapper.toUserResponse(user);
+        return userRepository.findByUsername(username)
+                .map(userMapper::toUserResponse)
+                .orElseGet(() -> userMapper.toUserResponse(
+                        createUserProfileIfNotExists(username)
+                ));
     }
 
-    public UserResponse updateUser(UpdateUserRequest req, String username,String roleStr) {
-        Role role = Role.valueOf(roleStr); //ENUM
+    public UserResponse updateUser(UpdateUserRequest req, String username) {
 
-        User user = userRepository.findByUsername(username)
-                .orElseGet(() -> {
-                    User newUser = new User();
-                    newUser.setUsername(username);
-                    newUser.setRole(role); // ENUM
-                    newUser.setPassword("");
-                    return newUser;
-                });
+        UserProfile user = userRepository.findByUsername(username)
+                .orElseGet(() -> createUserProfileIfNotExists(username));
 
         user.setFullName(req.getFullName());
         user.setEmail(req.getEmail());
@@ -63,9 +51,32 @@ public class UserService {
 
     @Transactional
     public void deleteUserByUsername(String username) {
+
         if (!userRepository.existsByUsername(username)) {
             throw new ResourceNotFoundException("User not found: " + username);
         }
+
         userRepository.deleteByUsername(username);
+
+        authServiceClient.deleteUser(username);
+
     }
+
+    private UserProfile createUserProfileIfNotExists(String username) {
+        try {
+            UserProfile newUser = new UserProfile();
+            newUser.setUsername(username);
+            newUser.setFullName("");
+            newUser.setEmail("");
+
+            return userRepository.saveAndFlush(newUser);
+
+        } catch (DataIntegrityViolationException e) {
+
+            return userRepository.findByUsername(username)
+                    .orElseThrow(() ->
+                            new RuntimeException("Failed to create or find user", e));
+        }
+    }
+
 }

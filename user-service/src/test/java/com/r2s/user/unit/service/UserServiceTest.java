@@ -1,12 +1,12 @@
 package com.r2s.user.unit.service;
 
-import com.r2s.core.entity.Role;
-import com.r2s.core.entity.User;
 import com.r2s.core.exception.ResourceNotFoundException;
-import com.r2s.core.repository.UserRepository;
+import com.r2s.user.client.AuthServiceClient;
 import com.r2s.user.dto.UpdateUserRequest;
 import com.r2s.user.dto.UserResponse;
+import com.r2s.user.entity.UserProfile;
 import com.r2s.user.mapper.UserMapper;
+import com.r2s.user.repository.UserProfileRepository;
 import com.r2s.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,55 +24,53 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class UserServiceUnitTest {
+class UserServiceTest {
 
     @Mock
-    private UserRepository userRepository;
+    private UserProfileRepository userRepository;
 
     @Mock
     private UserMapper userMapper;
 
+    @Mock
+    private AuthServiceClient authServiceClient;
 
     @InjectMocks
     private UserService userService;
 
-    private User user1;
-    private User user2;
+    private UserProfile user1;
+    private UserProfile user2;
 
     private UserResponse response1;
     private UserResponse response2;
 
-    
+
     @BeforeEach
     void setUp() {
-        user1 = User.builder()
+        user1 = UserProfile.builder()
                 .id(1L)
                 .username("username")
                 .email("email")
                 .fullName("fullname")
-                .role(Role.ROLE_USER)
                 .build();
 
-        user2 = User.builder()
+        user2 = UserProfile.builder()
                 .id(2L)
                 .username("username2")
                 .email("email2")
                 .fullName("fullname2")
-                .role(Role.ROLE_ADMIN)
                 .build();
 
         response1 = UserResponse.builder()
                 .username("username")
                 .fullName("fullname")
                 .email("email")
-                .role("ROLE_USER")
                 .build();
 
         response2 = UserResponse.builder()
                 .username("username2")
                 .fullName("fullname2")
                 .email("email2")
-                .role("ROLE_ADMIN")
                 .build();
     }
 
@@ -94,9 +92,7 @@ class UserServiceUnitTest {
         // Assert (output)
         assertEquals(2, result.size());
         assertEquals("username", result.get(0).getUsername());
-        assertEquals("ROLE_USER", result.get(0).getRole());
         assertEquals("username2", result.get(1).getUsername());
-        assertEquals("ROLE_ADMIN", result.get(1).getRole());
 
         // Assert (interaction)
         verify(userRepository).findAll();
@@ -116,7 +112,7 @@ class UserServiceUnitTest {
                 .thenReturn(response1);
 
         // Act
-        UserResponse result = userService.getUserByUsername(user1.getUsername(),user1.getRole().toString());
+        UserResponse result = userService.getUserByUsername(user1.getUsername());
 
         // Assert
         assertEquals(response1, result);
@@ -128,65 +124,64 @@ class UserServiceUnitTest {
 
     @Test
     void getUserByUsername_shouldCreateUser_whenNotFound() {
+
         when(userRepository.findByUsername("username"))
                 .thenReturn(Optional.empty());
 
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        ArgumentCaptor<UserProfile> userCaptor =
+                ArgumentCaptor.forClass(UserProfile.class);
 
-        when(userRepository.save(userCaptor.capture()))
+        when(userRepository.saveAndFlush(userCaptor.capture()))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-//      💡 Ở unit test service, ta KHÔNG test mapper → Mapper được coi là đã đúng
-//      ➡️ Nên mapper:nhận user nào cũng trả về response1 là chấp nhận được
-        when(userMapper.toUserResponse(any(User.class)))
+        when(userMapper.toUserResponse(any(UserProfile.class)))
                 .thenReturn(response1);
 
         // Act
-        UserResponse result =
-                userService.getUserByUsername("username", "ROLE_USER");
+        UserResponse result = userService.getUserByUsername("username");
 
         // Assert result
         assertEquals(response1, result);
 
-        // Assert user created
-        User savedUser = userCaptor.getValue();
+        UserProfile savedUser = userCaptor.getValue();
         assertEquals("username", savedUser.getUsername());
-        assertEquals(Role.ROLE_USER, savedUser.getRole());
+        assertEquals("", savedUser.getFullName());
+        assertEquals("", savedUser.getEmail());
 
         verify(userRepository).findByUsername("username");
-        verify(userRepository).save(any(User.class));
+        verify(userRepository).saveAndFlush(any(UserProfile.class));
         verify(userMapper).toUserResponse(savedUser);
+
         verifyNoMoreInteractions(userRepository, userMapper);
     }
 
     @Test
     void updateUser_shouldReturnUserResponse_whenUserExists() {
         when(userRepository.findByUsername(user1.getUsername())).thenReturn(Optional.of(user1));
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        ArgumentCaptor<UserProfile> userCaptor = ArgumentCaptor.forClass(UserProfile.class);
 
         when(userRepository.save(userCaptor.capture()))
                 .thenAnswer(inv -> inv.getArgument(0));
-        when(userMapper.toUserResponse(any(User.class))).thenReturn(response1);
+        when(userMapper.toUserResponse(any(UserProfile.class))).thenReturn(response1);
 
         UpdateUserRequest updateUserRequest = UpdateUserRequest.builder()
                 .email("newemail")
                 .fullName("newname").build();
 //        Act
         UserResponse userResponse=
-                userService.updateUser(updateUserRequest,user1.getUsername(),user1.getRole().toString());
+                userService.updateUser(updateUserRequest,user1.getUsername());
 
         // Assert result
         assertEquals(response1, userResponse);
 
         // Assert user created
-        User savedUser = userCaptor.getValue();
+        UserProfile savedUser = userCaptor.getValue();
         assertEquals(user1.getUsername(), savedUser.getUsername());
-        assertEquals(Role.ROLE_USER, savedUser.getRole());
         assertEquals("newemail", savedUser.getEmail());
         assertEquals("newname", savedUser.getFullName());
 
         verify(userRepository).findByUsername(user1.getUsername());
-        verify(userRepository).save(any(User.class));
+        verify(userRepository).save(any(UserProfile.class));
         verify(userMapper).toUserResponse(savedUser);
         verifyNoMoreInteractions(userRepository, userMapper);
     }
@@ -194,16 +189,20 @@ class UserServiceUnitTest {
 
     @Test
     void updateUser_shouldCreateUserAndSaveAndReturnUserResponse_whenNotFound() {
-        // Arrange
+
         when(userRepository.findByUsername("newuser"))
                 .thenReturn(Optional.empty());
 
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        ArgumentCaptor<UserProfile> userCaptor =
+                ArgumentCaptor.forClass(UserProfile.class);
+
+        when(userRepository.saveAndFlush(any(UserProfile.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
         when(userRepository.save(userCaptor.capture()))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        when(userMapper.toUserResponse(any(User.class)))
+        when(userMapper.toUserResponse(any(UserProfile.class)))
                 .thenReturn(response1);
 
         UpdateUserRequest req = UpdateUserRequest.builder()
@@ -212,30 +211,27 @@ class UserServiceUnitTest {
                 .build();
 
         // Act
-        UserResponse result =
-                userService.updateUser(req, "newuser", "ROLE_USER");
+        UserResponse result = userService.updateUser(req, "newuser");
 
-        // Assert result
+        // Assert
         assertEquals(response1, result);
 
-        // Assert created user
-        User savedUser = userCaptor.getValue();
+        UserProfile savedUser = userCaptor.getValue();
         assertEquals("newuser", savedUser.getUsername());
-        assertEquals(Role.ROLE_USER, savedUser.getRole());
         assertEquals("newemail", savedUser.getEmail());
         assertEquals("newname", savedUser.getFullName());
-        assertEquals("", savedUser.getPassword());
 
-        // Verify interactions
         verify(userRepository).findByUsername("newuser");
-        verify(userRepository).save(any(User.class));
+        verify(userRepository).saveAndFlush(any(UserProfile.class));
+        verify(userRepository).save(any(UserProfile.class));
         verify(userMapper).toUserResponse(savedUser);
+
         verifyNoMoreInteractions(userRepository, userMapper);
     }
 
     @Test
     void deleteUserByUsername_shouldDeleteUser_whenUserExists() {
-        // Arrange
+
         when(userRepository.existsByUsername(user1.getUsername()))
                 .thenReturn(true);
 
@@ -245,8 +241,9 @@ class UserServiceUnitTest {
         // Assert
         verify(userRepository).existsByUsername(user1.getUsername());
         verify(userRepository).deleteByUsername(user1.getUsername());
+        verify(authServiceClient).deleteUser(user1.getUsername());
 
-        verifyNoMoreInteractions(userRepository);
+        verifyNoMoreInteractions(userRepository, authServiceClient);
         verifyNoInteractions(userMapper);
     }
 

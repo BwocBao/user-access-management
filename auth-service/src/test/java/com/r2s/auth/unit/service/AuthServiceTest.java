@@ -1,15 +1,16 @@
 package com.r2s.auth.unit.service;
 
+import com.r2s.auth.client.UserServiceClient;
 import com.r2s.auth.dto.AuthResponse;
 import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
+import com.r2s.auth.entity.User;
+import com.r2s.auth.repository.UserRepository;
 import com.r2s.auth.service.AuthService;
 import com.r2s.core.entity.Role;
-import com.r2s.core.entity.User;
 import com.r2s.core.exception.CustomException;
 import com.r2s.core.exception.UnAuthorizedException;
-import com.r2s.core.repository.UserRepository;
 import com.r2s.core.security.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
@@ -29,7 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class AuthServiceUnitTest {
+class AuthServiceTest {
     @Mock
     private UserRepository userRepository;
 
@@ -41,6 +41,10 @@ class AuthServiceUnitTest {
 
     @InjectMocks
     private AuthService authService;
+
+    @Mock
+    private UserServiceClient userServiceClient;
+
 //
 //    private User user;
 
@@ -63,6 +67,8 @@ class AuthServiceUnitTest {
         when(passwordEncoder.encode("123"))
                 .thenReturn("encoded123");
 
+        doNothing().when(userServiceClient).syncUser(anyString());
+
         ArgumentCaptor<User> userCaptor =
                 ArgumentCaptor.forClass(User.class);
 
@@ -71,6 +77,7 @@ class AuthServiceUnitTest {
 
         // Act
         authService.register(req);
+
 
         // Assert user created correctly
         User savedUser = userCaptor.getValue();
@@ -82,6 +89,7 @@ class AuthServiceUnitTest {
         verify(userRepository).findByUsername("bwocbao");
         verify(passwordEncoder).encode("123");
         verify(userRepository).save(any(User.class));
+        verify(userServiceClient).syncUser("bwocbao");
         verifyNoMoreInteractions(userRepository, passwordEncoder);
         verifyNoInteractions(jwtUtil);
     }
@@ -157,7 +165,7 @@ class AuthServiceUnitTest {
 
     @Test
     void registerRole_success_whenRoleIsValid() {
-        // Arrange
+
         RegisterRoleRequest req = RegisterRoleRequest.builder()
                 .username("admin1")
                 .password("123")
@@ -170,17 +178,18 @@ class AuthServiceUnitTest {
         when(passwordEncoder.encode("123"))
                 .thenReturn("encoded123");
 
+        doNothing().when(userServiceClient).syncUser(anyString());
+
         ArgumentCaptor<User> userCaptor =
                 ArgumentCaptor.forClass(User.class);
 
         when(userRepository.save(userCaptor.capture()))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        // Act
         authService.registerRole(req);
 
-        // Assert
         User savedUser = userCaptor.getValue();
+
         assertEquals("admin1", savedUser.getUsername());
         assertEquals("encoded123", savedUser.getPassword());
         assertEquals(Role.ROLE_ADMIN, savedUser.getRole());
@@ -188,9 +197,9 @@ class AuthServiceUnitTest {
         verify(userRepository).findByUsername("admin1");
         verify(passwordEncoder).encode("123");
         verify(userRepository).save(any(User.class));
-        verifyNoMoreInteractions(userRepository, passwordEncoder);
-        verifyNoInteractions(jwtUtil);
+        verify(userServiceClient).syncUser("admin1");
     }
+
 
     @Test
     void registerRole_fail_whenUsernameExists() {

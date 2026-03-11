@@ -1,5 +1,6 @@
 package com.r2s.core.security;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -47,26 +48,50 @@ public class JwtFilter extends OncePerRequestFilter {
 
                 String token = authHeader.substring(7);
 
-                String username = jwtUtil.extractUsername(token);
-                String role = jwtUtil.extractRoles(token);
+                Claims claims = jwtUtil.extractAllClaims(token);
+
+                String username = claims.getSubject();
+                String role = claims.get("role", String.class);
+                String type = claims.get("type", String.class);
 
                 if (username != null &&
                         SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                    List<GrantedAuthority> authorities =
-                            List.of(new SimpleGrantedAuthority(role));
+                    if ("service".equals(type)) {
 
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    username,
-                                    null,
-                                    authorities
-                            );
+                        List<String> allowedServices = List.of("auth-service", "user-service");
 
-                    SecurityContextHolder.getContext()
-                            .setAuthentication(authentication);
+                        if (!allowedServices.contains(username)) {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            return;
+                        }
 
-                    MDC.put("user", username); // thêm user vào log
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(
+                                        username,
+                                        null,
+                                        List.of(new SimpleGrantedAuthority("ROLE_SERVICE"))
+                                );
+
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
+                    else if ("user".equals(type)) {
+
+                        List<GrantedAuthority> authorities =
+                                List.of(new SimpleGrantedAuthority(role));
+
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(
+                                        username,
+                                        null,
+                                        authorities
+                                );
+
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                        MDC.put("user", username); // thêm user vào log
+                    }
+
                 }
             }
 

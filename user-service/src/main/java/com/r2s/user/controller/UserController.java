@@ -7,6 +7,7 @@ import com.r2s.user.service.UserService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -19,11 +20,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
+@Slf4j
 public class UserController {
     private final UserService userService;
 
     @GetMapping("/hello")
     public String hello() {
+        log.info("Test logback logging from UserController");
         return "Hello from User Service";
     }
 
@@ -38,13 +41,13 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> getMyProfile() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
-        String role = auth.getAuthorities()
-                .iterator()
-                .next()
-                .getAuthority();
+//        String role = auth.getAuthorities()
+//                .iterator()
+//                .next()
+//                .getAuthority();
 
         return ResponseEntity.ok(ApiResponse
-                .success(userService.getUserByUsername(username, role),"Profile retrieved successfully"));
+                .success(userService.getUserByUsername(username),"Profile retrieved successfully"));
     }
 
     @PutMapping("/me")
@@ -52,11 +55,11 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> updateMyProfile(@Valid @RequestBody UpdateUserRequest updateUserRequest,
                                                         Authentication auth) {
         String username = auth.getName();
-        String role = auth.getAuthorities()
-                .iterator()
-                .next()
-                .getAuthority();
-        return ResponseEntity.ok(ApiResponse.success(userService.updateUser(updateUserRequest,username,role),"Profile updated successfully"));
+//        String role = auth.getAuthorities()
+//                .iterator()
+//                .next()
+//                .getAuthority();
+        return ResponseEntity.ok(ApiResponse.success(userService.updateUser(updateUserRequest,username),"Profile updated successfully"));
     }
 
     @DeleteMapping("/{username}")

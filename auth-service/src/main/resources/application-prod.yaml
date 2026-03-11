@@ -1,20 +1,18 @@
 management:
   server:
     port: 8888
-
   endpoints:
     web:
       base-path: /internal/actuator
       exposure:
-        include: health,info,metrics,prometheus
-
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never
-
   metrics:
     tags:
       application: auth-service
+
 
 logging:
   level:

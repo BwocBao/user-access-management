@@ -1,16 +1,17 @@
 package com.r2s.user.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.r2s.core.entity.Role;
-import com.r2s.core.entity.User;
-import com.r2s.core.repository.UserRepository;
 import com.r2s.core.security.JwtUtil;
+import com.r2s.user.client.AuthServiceClient;
 import com.r2s.user.dto.UpdateUserRequest;
+import com.r2s.user.entity.UserProfile;
+import com.r2s.user.repository.UserProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -21,6 +22,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -28,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
-class UserControllerIntegrationTest {
+class UserControllerTest {
 
     @Autowired
     MockMvc mockMvc;
@@ -40,15 +42,17 @@ class UserControllerIntegrationTest {
     JwtUtil jwtUtil;
 
     @Autowired
-    UserRepository userRepository;
+    UserProfileRepository userRepository;
+
+    @MockBean
+    AuthServiceClient authServiceClient;
 
     //  Trước khi chạy MỖI test case → xóa sạch dữ liệu trong DB. Vẫn tái sử dụng docker container
     @Autowired
     private JdbcTemplate jdbcTemplate;
-
     @BeforeEach
     void cleanDatabase() {
-        jdbcTemplate.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE TABLE user_profile RESTART IDENTITY CASCADE");
     }
 
     @Container
@@ -118,8 +122,7 @@ class UserControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
                 .andExpect(jsonPath("$.message").value("Profile retrieved successfully"))
-                .andExpect(jsonPath("$.data.username").value("user"))
-                .andExpect(jsonPath("$.data.role").value("ROLE_USER"));
+                .andExpect(jsonPath("$.data.username").value("user"));
     }
 
     @Test
@@ -141,7 +144,6 @@ class UserControllerIntegrationTest {
                 .andExpect(jsonPath("$.message").value("Profile updated successfully"))
                 .andExpect(jsonPath("$.data.username").value("user"))
                 .andExpect(jsonPath("$.data.fullName").value("User Updated"))
-                .andExpect(jsonPath("$.data.role").value("ROLE_USER"))
                 .andExpect(jsonPath("$.data.email").value("user@gmail.com"));
 
     }
@@ -150,17 +152,20 @@ class UserControllerIntegrationTest {
     void deleteUser_shouldReturn200_whenAdmin() throws Exception {
 
         // Tạo user trước
-        User user = User.builder().username("user").password("123456").role(Role.ROLE_USER).build();
+        UserProfile user = UserProfile.builder().username("user").build();
 
         userRepository.save(user);
 
         // Login admin
         String adminToken = generateToken("admin", "ROLE_ADMIN");
 
+        doNothing().when(authServiceClient).deleteUser("user");
+
         mockMvc.perform(delete("/api/users/user")
                         .header("Authorization", "Bearer " + adminToken))
 
                 .andExpect(status().isNoContent());
+
     }
 
 
@@ -168,7 +173,7 @@ class UserControllerIntegrationTest {
     void deleteUser_shouldReturn403_whenNotAdmin() throws Exception {
 
         // Tạo user trước
-        User user = User.builder().username("user").password("123456").role(Role.ROLE_USER).build();
+        UserProfile user = UserProfile.builder().username("user").build();
 
         userRepository.save(user);
 

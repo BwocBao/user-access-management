@@ -1,8 +1,8 @@
 package com.r2s.user.unit.mapper;
 
 import com.r2s.core.entity.Role;
-import com.r2s.core.entity.User;
 import com.r2s.user.dto.UserResponse;
+import com.r2s.user.entity.UserProfile;
 import com.r2s.user.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
 
@@ -17,13 +17,12 @@ class UserMapperTest {
     void toUserResponse_shouldMapAllFieldsCorrectly() {
 
         // Arrange
-        User user = User.builder().id(1L)
-                .email("beo9@gmail.com")
+        UserProfile user = UserProfile.builder()
                 .username("beo9")
                 .fullName("Beo Nguyen")
-                .password("1234")
-                .role(Role.ROLE_USER)
+                .email("beo9@gmail.com")
                 .build();
+
         // Act
         UserResponse response = userMapper.toUserResponse(user);
 
@@ -32,6 +31,5 @@ class UserMapperTest {
         assertEquals("beo9", response.getUsername());
         assertEquals("Beo Nguyen", response.getFullName());
         assertEquals("beo9@gmail.com", response.getEmail());
-        assertEquals("ROLE_USER", response.getRole());
     }
 }

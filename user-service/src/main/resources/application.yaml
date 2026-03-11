@@ -5,6 +5,10 @@ spring:
 server:
   port: 8082
 
+app:
+  auth-service:
+    url: http://localhost:8081
+
 jwt:
   access-key: ${JWT_ACCESS_KEY}
 

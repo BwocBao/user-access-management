@@ -8,16 +8,19 @@ import com.r2s.auth.service.AuthService;
 import com.r2s.core.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
     private final AuthService authService;
     @GetMapping("/hello")
     public String hello() {
+        log.info("Test logback logging from AuthController");
         return "Hello from Auth Service";
     }
 

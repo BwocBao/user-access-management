@@ -1,15 +1,14 @@
-package com.r2s.core.repository;
+package com.r2s.user.repository;
 
-import com.r2s.core.entity.User;
+import com.r2s.user.entity.UserProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-
-public interface UserRepository extends JpaRepository<User,Long> {
-    Optional<User> findByUsername(String username);
-
+@Repository
+public interface UserProfileRepository extends JpaRepository<UserProfile,Long> {
+    Optional<UserProfile> findByUsername(String username);
     void deleteByUsername(String username);
 
     boolean existsByUsername(String username);

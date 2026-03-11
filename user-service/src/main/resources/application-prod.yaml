@@ -1,18 +1,14 @@
 management:
-
   server:
     port: 8888
-
   endpoints:
     web:
       base-path: /internal/actuator
       exposure:
-        include: health,info,metrics,prometheus,loggers
-
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never
-
   metrics:
     tags:
       application: user-service
@@ -24,7 +20,6 @@ logging:
     org.hibernate: ERROR
 
 spring:
-
   lifecycle:
     timeout-per-shutdown-phase: 30s
 

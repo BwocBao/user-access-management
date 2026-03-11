@@ -13,7 +13,6 @@ spring:
       #1 connection sống tối đa 30 phút → reset. Dù đang khỏe cũng cho nghỉ.
       max-lifetime: 1800000
 
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -21,6 +20,19 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+management:
+  server:
+    port: 8888
+  endpoints:
+    web:
+      base-path: /internal/actuator
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      show-details: never
+
 logging:
   level:
     root: INFO

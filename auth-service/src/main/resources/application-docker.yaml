@@ -22,6 +22,19 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+management:
+  server:
+    port: 8888
+  endpoints:
+    web:
+      base-path: /internal/actuator
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      show-details: never
+
 logging:
   level:
     root: INFO

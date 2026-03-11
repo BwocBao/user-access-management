@@ -36,6 +36,7 @@ public class SecurityConfig {
                         authorizeRequests ->
                                 authorizeRequests
                                         .requestMatchers("/api/auth/**","/api/users/hello").permitAll()
+                                        .requestMatchers("/internal/**").authenticated()
                                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
@@ -71,6 +72,9 @@ public class SecurityConfig {
 
                         })
                 );
+
+        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 

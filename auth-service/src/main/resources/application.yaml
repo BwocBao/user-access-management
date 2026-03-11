@@ -5,10 +5,13 @@ spring:
 server:
   port: 8081
 
+app:
+  user-service:
+    url: http://localhost:8082
 jwt:
   access-key: ${JWT_ACCESS_KEY}
   access-exp-minutes: 60
-
+  service-exp-minutes: 5
 open:
   api:
     title: Auth Service API

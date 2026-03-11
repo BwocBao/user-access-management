@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @Configuration
 @Profile("!unittest") // chỉ bật khi KHÔNG test/ Bên test khi chạy sẽ tự disable mấy cái có profile=unittest
-@EnableJpaRepositories(basePackages = "com.r2s.core.repository")
-@EntityScan(basePackages = "com.r2s.core.entity")
+//@EnableJpaRepositories(basePackages = "com.r2s.core.repository")
+//@EntityScan(basePackages = "com.r2s.core.entity")
 public class JpaConfig {
 }

@@ -39,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfig.class) // import config thật
 @AutoConfigureMockMvc // BẬT SECURITY / mặc định addFilters = true
 @ActiveProfiles("unittest")
-class UserControllerUnitTest {
+class UserControllerTest {
     private static final String API = "/api/users";
 
     @Autowired
@@ -97,8 +97,8 @@ class UserControllerUnitTest {
     @WithMockUser(username = "admin", roles = {"ADMIN"})
     void getAllUsers_shouldReturn200_whenAdmin() throws Exception {
         List<UserResponse> mockUsers = List.of(
-                new UserResponse("admin2", "ROLE_ADMIN", "admin@example.com", "Gia Bao"),
-                new UserResponse("jane", "ROLE_USER", "jane@example.com", "Jane Smith")
+                new UserResponse("admin2",  "admin@example.com", "Gia Bao"),
+                new UserResponse("jane",  "jane@example.com", "Jane Smith")
         );
 
         when(userService.getAllUsers()).thenReturn(mockUsers);
@@ -115,13 +115,11 @@ class UserControllerUnitTest {
 
                 // User 1
                 .andExpect(jsonPath("$.data[0].username").value("admin2"))
-                .andExpect(jsonPath("$.data[0].role").value("ROLE_ADMIN"))
                 .andExpect(jsonPath("$.data[0].email").value("admin@example.com"))
                 .andExpect(jsonPath("$.data[0].fullName").value("Gia Bao"))
 
                 // User 2
                 .andExpect(jsonPath("$.data[1].username").value("jane"))
-                .andExpect(jsonPath("$.data[1].role").value("ROLE_USER"))
                 .andExpect(jsonPath("$.data[1].email").value("jane@example.com"))
                 .andExpect(jsonPath("$.data[1].fullName").value("Jane Smith"));
 
@@ -136,14 +134,10 @@ class UserControllerUnitTest {
                 .andExpect(status().isForbidden());
     }
 
-//    Không có JWT / không có user. Gán AnonymousAuthenticationToken
-//    Kiểm tra hasRole('ADMIN'). Anonymous không có role ADMIN
-//    ⇒ Access Denied → 403
-//  ➡️ Không phải unauthenticated, mà là authenticated as ANONYMOUS
     @Test
     void getAllUsers_shouldReturn401_whenUnauthenticated() throws Exception {
         mockMvc.perform(get(API))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     // =========================
@@ -154,10 +148,9 @@ class UserControllerUnitTest {
     void getMyProfile_shouldReturnProfile() throws Exception {
         UserResponse res = UserResponse.builder()
                 .username("bao")
-                .role("ROLE_USER")
                 .build();
 
-        when(userService.getUserByUsername("bao", "ROLE_USER"))
+        when(userService.getUserByUsername("bao"))
                 .thenReturn(res);
 
         mockMvc.perform(get(API + "/me"))
@@ -165,10 +158,9 @@ class UserControllerUnitTest {
                 .andExpect(jsonPath("$.status").value(200))
                 .andExpect(jsonPath("$.message")
                         .value("Profile retrieved successfully"))
-                .andExpect(jsonPath("$.data.username").value("bao"))
-                .andExpect(jsonPath("$.data.role").value("ROLE_USER"));
+                .andExpect(jsonPath("$.data.username").value("bao"));
 
-        verify(userService).getUserByUsername("bao", "ROLE_USER");
+        verify(userService).getUserByUsername("bao");
         verifyNoMoreInteractions(userService);
     }
 
@@ -185,14 +177,12 @@ class UserControllerUnitTest {
 
         UserResponse res = UserResponse.builder()
                 .username("bao")
-                .role("ROLE_USER")
                 .email("new@email.com")
                 .fullName("Bao Nguyen")
                 .build();
 
         when(userService.updateUser(any(UpdateUserRequest.class),
-                eq("bao"),
-                eq("ROLE_USER")))
+                eq("bao")))
                 .thenReturn(res);
 
         mockMvc.perform(put(API + "/me")
@@ -203,12 +193,11 @@ class UserControllerUnitTest {
                 .andExpect(jsonPath("$.message")
                         .value("Profile updated successfully"))
                 .andExpect(jsonPath("$.data.username").value("bao"))
-                .andExpect(jsonPath("$.data.role").value("ROLE_USER"))
                 .andExpect(jsonPath("$.data.email").value("new@email.com"))
                 .andExpect(jsonPath("$.data.fullName").value("Bao Nguyen"))
                 .andDo(print());;
 
-        verify(userService).updateUser(any(UpdateUserRequest.class),eq("bao"),eq("ROLE_USER"));
+        verify(userService).updateUser(any(UpdateUserRequest.class),eq("bao"));
         verifyNoMoreInteractions(userService);
     }
 

@@ -16,13 +16,15 @@ import java.util.Date;
 @Component
 public class JwtUtil {
     private final SecretKey accessKey;
-    private final Long accessExpMinutes;
-
+    private final long accessExpMinutes;
+    private final long serviceExpMinutes;
     public JwtUtil(
             @Value("${jwt.access-key}") String accessKeyBase64,
-            @Value("${jwt.access-exp-minutes:15}") long accessExpMinutes) {
+            @Value("${jwt.access-exp-minutes:15}") long accessExpMinutes,
+            @Value("${jwt.service-exp-minutes:5}") long serviceExpMinutes) {
         this.accessKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(accessKeyBase64));
         this.accessExpMinutes = accessExpMinutes;
+        this.serviceExpMinutes = serviceExpMinutes;
     }
 
     public String generateToken(String username,String role) {
@@ -34,6 +36,23 @@ public class JwtUtil {
         return Jwts.builder()
                 .setSubject(username)
                 .claim("role",role)
+                .claim("type","user")
+                .setIssuedAt(now)
+                .setExpiration(expiration)
+                .signWith(accessKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String generateServiceToken(String serviceName) {
+
+        Date now = new Date();
+        Date expiration = Date.from(
+                Instant.now().plus(serviceExpMinutes, ChronoUnit.MINUTES)
+        );
+
+        return Jwts.builder()
+                .setSubject(serviceName)
+                .claim("type", "service")
                 .setIssuedAt(now)
                 .setExpiration(expiration)
                 .signWith(accessKey, SignatureAlgorithm.HS256)
@@ -65,7 +84,6 @@ public class JwtUtil {
 //                .getBody()
 //                .getSubject();
 //    }
-
 //    parseClaimsJws() sẽ ném exception:
 //
 //    Trường hợp	       Exception
@@ -73,7 +91,6 @@ public class JwtUtil {
 //    Hết hạn	      ExpiredJwtException
 //    Sai format	  MalformedJwtException
 //    Key sai	      UnsupportedJwtException
-
 //    public boolean validateToken(String token, UserDetails userDetails) {
 //        return extractUsername(token).equals(userDetails.getUsername());
 //    }

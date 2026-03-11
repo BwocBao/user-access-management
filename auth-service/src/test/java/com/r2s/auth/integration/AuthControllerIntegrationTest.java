@@ -1,6 +1,7 @@
 package com.r2s.auth.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.r2s.auth.client.UserServiceClient;
 import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -19,6 +21,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -33,14 +37,20 @@ public class AuthControllerIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+    @MockBean
+    private UserServiceClient userServiceClient;
 
 //  Trước khi chạy MỖI test case → xóa sạch dữ liệu trong DB. Vẫn tái sử dụng docker container
     @Autowired
     private JdbcTemplate jdbcTemplate;
-
     @BeforeEach
     void cleanDatabase() {
         jdbcTemplate.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
+    }
+// setup cho stub cho userServiceClient
+    @BeforeEach
+    void setup() {
+        doNothing().when(userServiceClient).syncUser(anyString());
     }
     // ============================
     // PostgreSQL Container
@@ -123,7 +133,7 @@ public class AuthControllerIntegrationTest {
         RegisterRoleRequest request = new RegisterRoleRequest();
         request.setUsername("bwocbao");
         request.setPassword("123456");
-        request.setRole("Role_Admin");
+        request.setRole("ROLE_ADMIN");
 
         mockMvc.perform(post("/api/auth/register/role")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("unittest")
-class AuthControllerUnitTest {
+class AuthControllerTest {
     private static final String API="/api/auth";
 
     @Autowired
@@ -36,7 +36,6 @@ class AuthControllerUnitTest {
 
     @MockBean
     private AuthService authService;
-
 
     @MockBean
     private JwtFilter jwtFilter;
@@ -54,6 +53,8 @@ class AuthControllerUnitTest {
                 .username("bwocbao")
                 .password("123")
                 .build();
+
+        doNothing().when(authService).register(any(RegisterRequest.class));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -131,6 +132,8 @@ class AuthControllerUnitTest {
                 .password("123")
                 .role("ROLE_ADMIN")
                 .build();
+
+//        doNothing().when(authService).register(any(RegisterRequest.class));
 
         mockMvc.perform(post("/api/auth/register/role")
                         .contentType(MediaType.APPLICATION_JSON)

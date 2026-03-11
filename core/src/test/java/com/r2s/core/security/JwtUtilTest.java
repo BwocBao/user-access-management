@@ -12,7 +12,7 @@ class JwtUtilTest {
     @BeforeEach
     void setup() {
         String secret = "bXlzZWNyZXRrZXlteXNlY3JldGtleW15c2VjcmV0a2V5"; // base64
-        jwtUtil = new JwtUtil(secret, 15);
+        jwtUtil = new JwtUtil(secret, 15,5);
     }
 
     @Test
