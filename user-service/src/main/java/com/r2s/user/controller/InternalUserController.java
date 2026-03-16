@@ -2,6 +2,7 @@ package com.r2s.user.controller;
 
 import com.r2s.user.entity.UserProfile;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -15,19 +16,19 @@ public class InternalUserController {
 
     private final UserProfileRepository userRepository;
 
-    @PreAuthorize("hasRole('SERVICE')")
     @PostMapping("/sync/{username}")
+    @PreAuthorize("hasRole('SERVICE')")
     public ResponseEntity<Void> createUser(@PathVariable("username") String username) {
 
-        if (userRepository.existsByUsername(username)) {
-            return ResponseEntity.ok().build();
+        try {
+            userRepository.save(
+                    UserProfile.builder()
+                            .username(username)
+                            .build()
+            );
+        } catch (DataIntegrityViolationException e) {
+            // user đã tồn tại → ignore
         }
-
-        userRepository.save(
-                UserProfile.builder()
-                        .username(username)
-                        .build()
-        );
 
         return ResponseEntity.ok().build();
     }

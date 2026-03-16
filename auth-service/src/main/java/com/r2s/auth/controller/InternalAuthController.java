@@ -3,6 +3,7 @@ package com.r2s.auth.controller;
 import com.r2s.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -12,6 +13,7 @@ public class InternalAuthController {
 
     private final UserRepository userRepository;
 
+    @PreAuthorize("hasRole('SERVICE')")
     @DeleteMapping("/{username}")
     public ResponseEntity<Void> deleteUser(@PathVariable String username) {
 
@@ -21,11 +23,12 @@ public class InternalAuthController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/{username}/exists")
-    public ResponseEntity<Boolean> exists(@PathVariable String username) {
-
-        boolean exists = userRepository.findByUsername(username).isPresent();
-
-        return ResponseEntity.ok(exists);
-    }
+//    @PreAuthorize("hasRole('SERVICE')")
+//    @GetMapping("/{username}/exists")
+//    public ResponseEntity<Boolean> exists(@PathVariable("username String username) {
+//
+//        boolean exists = userRepository.findByUsername(username).isPresent();
+//
+//        return ResponseEntity.ok(exists);
+//    }
 }

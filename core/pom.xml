@@ -13,9 +13,10 @@
     <artifactId>core</artifactId>
     <name>core</name>
     <packaging>jar</packaging>
-    <properties>
-        <jacoco.skip>true</jacoco.skip>
-    </properties>
+    <!--skip jacoco-->
+<!--    <properties>-->
+<!--        <jacoco.skip>true</jacoco.skip>-->
+<!--    </properties>-->
   <dependencies>
 <!--       Spring Boot -->
       <dependency>

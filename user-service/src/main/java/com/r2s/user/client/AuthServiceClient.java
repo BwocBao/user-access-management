@@ -30,14 +30,14 @@ public class AuthServiceClient {
                 .block();
     }
 
-    public boolean existsByUsername(String username) {
-
-        Boolean result = webClient.get()
-                .uri(authServiceUrl + "/internal/users/{username}/exists", username)
-                .retrieve()
-                .bodyToMono(Boolean.class)
-                .block();
-
-        return Boolean.TRUE.equals(result);
-    }
+//    public boolean existsByUsername(String username) {
+//
+//        Boolean result = webClient.get()
+//                .uri(authServiceUrl + "/internal/users/{username}/exists", username)
+//                .retrieve()
+//                .bodyToMono(Boolean.class)
+//                .block();
+//
+//        return Boolean.TRUE.equals(result);
+//    }
 }

@@ -1,9 +1,10 @@
 package com.r2s.core.security;
 
+import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 class JwtUtilTest {
 
@@ -33,6 +34,36 @@ class JwtUtilTest {
         String role = jwtUtil.extractRoles(token);
 
         assertEquals("ROLE_ADMIN", role);
+    }
+
+    @Test
+    void generateServiceToken_shouldContainServiceType() {
+
+        String token = jwtUtil.generateServiceToken("auth-service");
+
+        String username = jwtUtil.extractUsername(token);
+
+        assertEquals("auth-service", username);
+    }
+
+    @Test
+    void token_shouldContainExpiration() {
+
+        String token = jwtUtil.generateToken("beo9","ROLE_USER");
+
+        Claims claims = jwtUtil.extractAllClaims(token);
+
+        assertNotNull(claims.getExpiration());
+    }
+
+    @Test
+    void extractClaims_shouldThrowException_whenTokenInvalid() {
+
+        String invalidToken = "abc.def.ghi";
+
+        assertThrows(Exception.class, () -> {
+            jwtUtil.extractAllClaims(invalidToken);
+        });
     }
 
 }
