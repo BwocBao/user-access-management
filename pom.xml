@@ -101,7 +101,7 @@
                             <excludes>
                                 <exclude>**/dto/**</exclude>
                                 <exclude>**/entity/**</exclude>
-                                <exclude>**/config/**</exclude>
+<!--                                <exclude>**/config/**</exclude>-->
                                 <exclude>**/*Application*</exclude>
 <!--                                <exclude>**/controller/RoleController*</exclude>-->
 <!--                                <exclude>**/controller/InternalAuthController*</exclude>-->
@@ -124,7 +124,6 @@
                             <excludes>
                                 <exclude>**/dto/**</exclude>
                                 <exclude>**/entity/**</exclude>
-                                <exclude>**/config/**</exclude>
                                 <exclude>**/*Application*</exclude>
 <!--                                <exclude>**/controller/RoleController*</exclude>-->
 <!--                                <exclude>**/controller/InternalAuthController*</exclude>-->
