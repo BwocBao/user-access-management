@@ -6,6 +6,7 @@ import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
 import com.r2s.auth.entity.User;
+import com.r2s.auth.messaging.EventPublisher;
 import com.r2s.core.entity.Role;
 import com.r2s.core.exception.CustomException;
 import com.r2s.core.exception.UnAuthorizedException;
@@ -23,6 +24,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final UserServiceClient userServiceClient;
+    private final EventPublisher  eventPublisher;
 
     @Transactional
     public void register(RegisterRequest registerRequest) {
@@ -36,7 +38,11 @@ public class AuthService {
         user.setRole(Role.ROLE_USER);
         userRepository.save(user);
 
-        userServiceClient.syncUser(user.getUsername());
+        // 🔥 publish event thay vì HTTP
+        eventPublisher.publishUserRegistered(user.getUsername());
+//        eventPublisher.publishFakeUserRegistered(user.getUsername());
+
+//        userServiceClient.syncUser(user.getUsername());
     }
 
     public AuthResponse login(LoginRequest loginRequest) {

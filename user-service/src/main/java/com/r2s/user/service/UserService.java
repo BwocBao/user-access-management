@@ -6,8 +6,10 @@ import com.r2s.user.dto.UpdateUserRequest;
 import com.r2s.user.dto.UserResponse;
 import com.r2s.user.entity.UserProfile;
 import com.r2s.user.mapper.UserMapper;
+import com.r2s.user.messaging.EventPublisher;
 import com.r2s.user.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,7 @@ public class UserService {
     private final UserProfileRepository userRepository;
     private final UserMapper userMapper;
     private final AuthServiceClient authServiceClient;
+    private final EventPublisher eventPublisher;
 
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll()
@@ -58,7 +61,8 @@ public class UserService {
 
         userRepository.deleteByUsername(username);
 
-        authServiceClient.deleteUser(username);
+//        authServiceClient.deleteUser(username);
+        eventPublisher.publishUserDeleted(username);
 
     }
 
