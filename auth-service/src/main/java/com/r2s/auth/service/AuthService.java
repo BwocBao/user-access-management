@@ -39,8 +39,8 @@ public class AuthService {
         userRepository.save(user);
 
         // 🔥 publish event thay vì HTTP
-        eventPublisher.publishUserRegistered(user.getUsername());
-//        eventPublisher.publishFakeUserRegistered(user.getUsername());
+//        eventPublisher.publishUserRegistered(user.getUsername());
+        eventPublisher.publishFakeUserRegistered(user.getUsername());
 
 //        userServiceClient.syncUser(user.getUsername());
     }

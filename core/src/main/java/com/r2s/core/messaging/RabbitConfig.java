@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,10 +27,7 @@ public class RabbitConfig {
         factory.setUsername(username);
         factory.setPassword(password);
 
-        // Publisher Confirm
         factory.setPublisherConfirmType(CachingConnectionFactory.ConfirmType.CORRELATED);
-
-        // Publisher Returns
         factory.setPublisherReturns(true);
 
         return factory;
@@ -46,66 +44,33 @@ public class RabbitConfig {
 
         RabbitTemplate template = new RabbitTemplate(cf);
         template.setMessageConverter(converter);
+
+        // ✅ QUAN TRỌNG: gắn callback cho retry template
+        template.setConfirmCallback((cd, ack, cause) ->
+                handleRetry(template, cd, ack, cause)
+        );
+
         return template;
     }
 
     @Bean
     public RabbitTemplate rabbitTemplate(CachingConnectionFactory cf,
-                                         Jackson2JsonMessageConverter converter,RabbitTemplate retryRabbitTemplate) {
+                                         Jackson2JsonMessageConverter converter,
+                                         RabbitTemplate retryRabbitTemplate) {
 
         RabbitTemplate template = new RabbitTemplate(cf);
         template.setMessageConverter(converter);
 
-        // bắt buộc để trigger ReturnsCallback
         template.setMandatory(true);
 
-        // =========================
-        // 1. CONFIRM CALLBACK (publisher -> exchange)
-        // =========================
-        template.setConfirmCallback((correlationData, ack, cause) -> {
+        // ✅ callback chính
+        template.setConfirmCallback((cd, ack, cause) ->
+                handleRetry(retryRabbitTemplate, cd, ack, cause)
+        );
 
-            if (ack) return;
-
-            log.error("Publish failed: cause={}", cause);
-
-            if (correlationData instanceof CustomCorrelationData cd) {
-
-                Message message = cd.getMessage();
-                if (message == null) return;
-
-                String exchange = cd.getExchange();
-                String routingKey = cd.getRoutingKey();
-
-                Integer retry = (Integer) message.getMessageProperties()
-                        .getHeaders()
-                        .getOrDefault(HEADER_PUBLISH_RETRY_COUNT, 0);
-
-                if (retry < MAX_RETRY) {
-
-                    message.getMessageProperties()
-                            .getHeaders()
-                            .put(HEADER_PUBLISH_RETRY_COUNT, retry + 1);
-
-                    log.error("Retry publish attempt {}", retry + 1);
-
-                    // ✅ dùng template KHÁC
-                    retryRabbitTemplate.send(exchange, routingKey, message);
-
-                } else {
-
-                    log.error("Drop message after max retry. cause={}", cause);
-
-                }
-            }
-        });
-
-        // =========================
-        // 2. RETURNS CALLBACK (exchange -> queue)
-        // =========================
         template.setReturnsCallback(returned -> {
 
             Message message = returned.getMessage();
-
             String messageId = message.getMessageProperties().getMessageId();
 
             log.error(
@@ -115,11 +80,59 @@ public class RabbitConfig {
                     returned.getRoutingKey(),
                     returned.getReplyText()
             );
-
-            // ❗ không retry vì lỗi config (routing sai / queue chưa bind)
         });
 
         return template;
+    }
+
+    // =========================
+    // 🔥 CORE RETRY LOGIC
+    // =========================
+    private void handleRetry(RabbitTemplate template,
+                             CorrelationData correlationData,
+                             boolean ack,
+                             String cause) {
+
+        if (ack) return;
+
+        log.error("Publish failed: cause={}", cause);
+
+        if (correlationData instanceof CustomCorrelationData cd) {
+
+            Message message = cd.getMessage();
+            if (message == null) return;
+
+            String exchange = cd.getExchange();
+            String routingKey = cd.getRoutingKey();
+
+            Integer retry = (Integer) message.getMessageProperties()
+                    .getHeaders()
+                    .getOrDefault(HEADER_PUBLISH_RETRY_COUNT, 0);
+
+            if (retry < MAX_RETRY) {
+
+                int nextRetry = retry + 1;
+
+                message.getMessageProperties()
+                        .getHeaders()
+                        .put(HEADER_PUBLISH_RETRY_COUNT, nextRetry);
+
+                log.warn("Retry publish attempt {}", nextRetry);
+
+                try {
+                    // (optional) delay nhẹ tránh spam
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+//                template.send(USER_EXCHANGE, routingKey, message, correlationData);
+                template.send(exchange, routingKey, message, correlationData);
+
+            } else {
+
+                log.error("Drop message after max retry. cause={}", cause);
+            }
+        }
     }
 
     @PostConstruct
