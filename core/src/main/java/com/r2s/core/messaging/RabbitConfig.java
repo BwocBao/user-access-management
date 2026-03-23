@@ -1,5 +1,6 @@
 package com.r2s.core.messaging;
 
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
@@ -85,7 +86,7 @@ public class RabbitConfig {
                             .getHeaders()
                             .put(HEADER_PUBLISH_RETRY_COUNT, retry + 1);
 
-                    log.warn("Retry publish attempt {}", retry + 1);
+                    log.error("Retry publish attempt {}", retry + 1);
 
                     // ✅ dùng template KHÁC
                     retryRabbitTemplate.send(exchange, routingKey, message);
@@ -119,5 +120,10 @@ public class RabbitConfig {
         });
 
         return template;
+    }
+
+    @PostConstruct
+    public void init() {
+        log.info("RabbitConfig loaded");
     }
 }

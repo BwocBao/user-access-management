@@ -82,7 +82,7 @@
         <!--
             File log hiện tại.
         -->
-        <file>logs/app.log</file>
+        <file>${LOG_PATH:-logs}/app.log</file>
 
         <!--
             Rolling policy: tự động rotate log theo thời gian.
@@ -145,6 +145,8 @@
         <!--
             Tất cả log sẽ được gửi tới cả console và file.
         -->
+        <queueSize>10000</queueSize>
+        <discardingThreshold>0</discardingThreshold>
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
 
