@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableScheduling
 @SpringBootApplication(scanBasePackages = {"com.r2s.auth", "com.r2s.core"})
+//@SpringBootApplication
 public class AuthServiceApplication
 {
     public static void main(String[] args) {

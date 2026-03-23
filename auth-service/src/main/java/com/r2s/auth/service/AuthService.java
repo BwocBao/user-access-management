@@ -7,6 +7,7 @@ import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
 import com.r2s.auth.entity.User;
 import com.r2s.auth.messaging.EventPublisher;
+import com.r2s.auth.messaging.OutboxService;
 import com.r2s.core.entity.Role;
 import com.r2s.core.exception.CustomException;
 import com.r2s.core.exception.UnAuthorizedException;
@@ -25,6 +26,7 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final UserServiceClient userServiceClient;
     private final EventPublisher  eventPublisher;
+    private final OutboxService outboxService;
 
     @Transactional
     public void register(RegisterRequest registerRequest) {
@@ -39,9 +41,10 @@ public class AuthService {
         userRepository.save(user);
 
         // 🔥 publish event thay vì HTTP
-        eventPublisher.publishUserRegistered(user.getUsername());
+//        eventPublisher.publishUserRegistered(user.getUsername());
 //        eventPublisher.publishFakeUserRegistered(user.getUsername());
-
+        // ✅ thay vì publish trực tiếp
+        outboxService.saveUserRegisteredEvent(user.getUsername());
 //        userServiceClient.syncUser(user.getUsername());
     }
 

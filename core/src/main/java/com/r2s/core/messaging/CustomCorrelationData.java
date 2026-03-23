@@ -11,6 +11,17 @@ import org.springframework.amqp.rabbit.connection.CorrelationData;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+public class CustomCorrelationData extends CorrelationData {
+    private String exchange;
+    private String routingKey;
+    private Message message;
+    private String outboxId; // 🔥 thêm
+
+    public CustomCorrelationData(String userExchange, String userRegistered) {
+        this.exchange=userExchange;
+        this.routingKey=userRegistered;
+    }
+}
 // CustomCorrelationData dùng để lưu exchange, routingKey và message gốc
 // vì Spring AMQP không cung cấp lại các thông tin này trong ConfirmCallback.
 // Điều này cho phép implement cơ chế retry publish khi broker không xác nhận (ack=false).
@@ -25,13 +36,3 @@ import org.springframework.amqp.rabbit.connection.CorrelationData;
 //lấy lại message + exchange + routingKey từ CustomCorrelationData
 //   ↓
 //retry publish
-public class CustomCorrelationData extends CorrelationData {
-    private String exchange;
-    private String routingKey;
-    private Message message;
-
-    public CustomCorrelationData(String userExchange, String userRegistered) {
-        this.exchange=userExchange;
-        this.routingKey=userRegistered;
-    }
-}
