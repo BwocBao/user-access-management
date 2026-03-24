@@ -29,52 +29,6 @@ public class EventConsumer {
     public void handle(UserRegisteredEvent event,
                        Message message,
                        Channel channel) throws Exception {
-//        try {
-//            throw new RuntimeException("Fake error");
-//        } catch (Exception e) {
-//            long tag = message.getMessageProperties().getDeliveryTag();
-//            // retry logic ở đây
-//            Object retryObj = message.getMessageProperties()
-//                    .getHeaders()
-//                    .get(HEADER_CONSUME_RETRY_COUNT);
-//
-//            int retryCount = retryObj instanceof Integer ? (Integer) retryObj : 0;
-//
-//            if (retryCount < MAX_RETRY) {
-//
-//                log.warn("Retrying message, attempt {}", retryCount + 1);
-//
-//                Message newMessage = MessageBuilder
-//                        .fromMessage(message)
-//                        .setHeader(HEADER_CONSUME_RETRY_COUNT, retryCount + 1)
-//                        .build();
-//
-//                // =========================
-//                // SEND TO RETRY
-//                // =========================
-//                rabbitTemplate.send(
-//                        USER_RETRY_EXCHANGE,
-//                        USER_REGISTERED_RETRY_ROUTING,
-//                        newMessage
-//                );
-//
-//                channel.basicAck(tag, false);
-//            }
-//            else {
-//                log.error("Max retry reached → send to DLQ: {}", event.getUsername());
-////                channel.basicReject(tag, false); tự cho vào dlq theo binding mình đã viết ở userexchange
-//                // =========================
-//                // SEND TO DLQ
-//                // =========================
-//                rabbitTemplate.send(
-//                        USER_DLQ_EXCHANGE,
-//                        USER_REGISTERED_DLQ_ROUTING,
-//                        message
-//                );
-//
-//                channel.basicAck(tag, false); // không reject nữa
-//            }
-//        }
         long tag = message.getMessageProperties().getDeliveryTag();
 
         try {
