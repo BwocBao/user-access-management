@@ -62,9 +62,8 @@ public class UserService {
         }
 
         userRepository.deleteByUsername(username);
+
         outboxService.saveUserDeletedEvent(username);
-//        authServiceClient.deleteUser(username);
-//        eventPublisher.publishUserDeleted(username);
 
     }
 

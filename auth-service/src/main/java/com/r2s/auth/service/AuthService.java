@@ -40,12 +40,8 @@ public class AuthService {
         user.setRole(Role.ROLE_USER);
         userRepository.save(user);
 
-        // 🔥 publish event thay vì HTTP
-//        eventPublisher.publishUserRegistered(user.getUsername());
-//        eventPublisher.publishFakeUserRegistered(user.getUsername());
         // ✅ thay vì publish trực tiếp
         outboxService.saveUserRegisteredEvent(user.getUsername());
-//        userServiceClient.syncUser(user.getUsername());
     }
 
     public AuthResponse login(LoginRequest loginRequest) {
