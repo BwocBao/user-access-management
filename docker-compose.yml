@@ -1,6 +1,24 @@
 version: "3.9"
 
 services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitMQ
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      #Mỗi 10s test rabbitMQ coi rabbitMQ sẵn sàng chưa
+      interval: 10s
+      #Nếu 5s ko trả lời thì fail
+      timeout: 5s
+      #Fail 10 lần → container = unhealthy. Lúc này các service depends_on rabbitMQ sẽ ko chạy đc
+      retries: 10
+
 
   postgres:
     image: postgres:15
@@ -14,6 +32,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
+
     ports:
       - "55432:5432"
 
@@ -25,7 +44,7 @@ services:
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     #Đợi DB READY rồi mới cho service start.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
     #Mỗi 5s test DB coi database sẵn sàng chưa
       interval: 5s
     #Nếu 5s ko trả lời thì fail
@@ -53,6 +72,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
 
       JWT_ACCESS_KEY: ${JWT_ACCESS_KEY}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
 
     ports:
       - "8081:8081"
@@ -61,11 +84,11 @@ services:
       postgres:
         condition: service_healthy
 
-
   user-service:
     build:
       context: .
       dockerfile: user-service/Dockerfile
+    container_name: user-service
     restart: always
 
     env_file:
@@ -79,6 +102,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
 
       JWT_ACCESS_KEY: ${JWT_ACCESS_KEY}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
 
     ports:
       - "8082:8082"
@@ -86,6 +113,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_started
 
 #Tạo volume trong docker, docker tự quản lý chỗ lưu mình ko cần quan tâm
 #Giống mình chạy lệnh docker volume create postgres_data

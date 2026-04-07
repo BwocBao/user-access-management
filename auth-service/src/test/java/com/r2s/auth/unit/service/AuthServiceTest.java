@@ -1,18 +1,17 @@
 package com.r2s.auth.unit.service;
 
-import com.r2s.auth.client.UserServiceClient;
 import com.r2s.auth.dto.AuthResponse;
 import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
 import com.r2s.auth.entity.User;
+import com.r2s.auth.messaging.OutboxService;
 import com.r2s.auth.repository.UserRepository;
 import com.r2s.auth.service.AuthService;
 import com.r2s.core.entity.Role;
 import com.r2s.core.exception.CustomException;
 import com.r2s.core.exception.UnAuthorizedException;
 import com.r2s.core.security.JwtUtil;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +29,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
+
     @Mock
     private UserRepository userRepository;
 
@@ -39,23 +39,14 @@ class AuthServiceTest {
     @Mock
     private JwtUtil jwtUtil;
 
+    @Mock
+    private OutboxService outboxService;
+
     @InjectMocks
     private AuthService authService;
 
-    @Mock
-    private UserServiceClient userServiceClient;
-
-//
-//    private User user;
-
-    @BeforeEach
-    void setUp() {
-//        user = User.builder()..build();
-    }
-
     @Test
     void register_success_whenUserIsValid() {
-        // Arrange
         RegisterRequest req = RegisterRequest.builder()
                 .username("bwocbao")
                 .password("123")
@@ -67,36 +58,29 @@ class AuthServiceTest {
         when(passwordEncoder.encode("123"))
                 .thenReturn("encoded123");
 
-        doNothing().when(userServiceClient).syncUser(anyString());
-
-        ArgumentCaptor<User> userCaptor =
-                ArgumentCaptor.forClass(User.class);
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
 
         when(userRepository.save(userCaptor.capture()))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        // Act
         authService.register(req);
 
-
-        // Assert user created correctly
         User savedUser = userCaptor.getValue();
         assertEquals("bwocbao", savedUser.getUsername());
         assertEquals("encoded123", savedUser.getPassword());
         assertEquals(Role.ROLE_USER, savedUser.getRole());
 
-        // Verify interactions
         verify(userRepository).findByUsername("bwocbao");
         verify(passwordEncoder).encode("123");
         verify(userRepository).save(any(User.class));
-        verify(userServiceClient).syncUser("bwocbao");
-        verifyNoMoreInteractions(userRepository, passwordEncoder);
+        verify(outboxService).saveUserRegisteredEvent("bwocbao");
+
+        verifyNoMoreInteractions(userRepository, passwordEncoder, outboxService);
         verifyNoInteractions(jwtUtil);
     }
 
     @Test
-    void register_fail_whenUserIsNotValid() {
-        // Arrange
+    void register_fail_whenUserAlreadyExists() {
         RegisterRequest req = RegisterRequest.builder()
                 .username("bwocbao")
                 .password("123")
@@ -105,67 +89,100 @@ class AuthServiceTest {
         when(userRepository.findByUsername("bwocbao"))
                 .thenReturn(Optional.of(User.builder().username("bwocbao").build()));
 
-        assertThatThrownBy(()->authService.register(req))
+        assertThatThrownBy(() -> authService.register(req))
                 .isInstanceOf(CustomException.class)
                 .hasMessageContaining("Username exist");
 
         verify(userRepository).findByUsername("bwocbao");
         verifyNoMoreInteractions(userRepository);
-        verifyNoInteractions(jwtUtil, passwordEncoder);
+        verifyNoInteractions(passwordEncoder, jwtUtil, outboxService);
     }
 
     @Test
     void login_shouldReturnAuthResponse_whenUserIsValid() {
-        LoginRequest req= LoginRequest.builder().username("bwocbao").password("123").build();
-        when(userRepository.findByUsername("bwocbao")).thenReturn(Optional.of(User.builder()
-                .username("bwocbao").password("encoded123").role(Role.ROLE_USER).build()));
-        when(passwordEncoder.matches("123", "encoded123")).thenReturn(true);
-        when(jwtUtil.generateToken("bwocbao", "ROLE_USER")).thenReturn("token123");
+        LoginRequest req = LoginRequest.builder()
+                .username("bwocbao")
+                .password("123")
+                .build();
 
-        AuthResponse authResponse= authService.login(req);
+        when(userRepository.findByUsername("bwocbao"))
+                .thenReturn(Optional.of(
+                        User.builder()
+                                .username("bwocbao")
+                                .password("encoded123")
+                                .role(Role.ROLE_USER)
+                                .build()
+                ));
+
+        when(passwordEncoder.matches("123", "encoded123"))
+                .thenReturn(true);
+
+        when(jwtUtil.generateToken("bwocbao", "ROLE_USER"))
+                .thenReturn("token123");
+
+        AuthResponse authResponse = authService.login(req);
 
         assertEquals("token123", authResponse.getToken());
 
         verify(userRepository).findByUsername("bwocbao");
         verify(passwordEncoder).matches("123", "encoded123");
         verify(jwtUtil).generateToken("bwocbao", "ROLE_USER");
+
         verifyNoMoreInteractions(userRepository, passwordEncoder, jwtUtil);
+        verifyNoInteractions(outboxService);
     }
 
     @Test
     void login_fail_whenUsernameNotExist() {
-        LoginRequest req = LoginRequest.builder().username("notExist").password("123").build();
-        when(userRepository.findByUsername("notExist")).thenReturn(Optional.empty());
+        LoginRequest req = LoginRequest.builder()
+                .username("notExist")
+                .password("123")
+                .build();
 
-        assertThatThrownBy(()->authService.login(req))
+        when(userRepository.findByUsername("notExist"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.login(req))
                 .isInstanceOf(UnAuthorizedException.class)
                 .hasMessageContaining("Username does not exist");
 
         verify(userRepository).findByUsername("notExist");
-        verifyNoMoreInteractions(userRepository, passwordEncoder);
-        verifyNoInteractions(jwtUtil);
+        verifyNoMoreInteractions(userRepository);
+        verifyNoInteractions(passwordEncoder, jwtUtil, outboxService);
     }
 
     @Test
     void login_fail_whenPasswordNotMatch() {
-        LoginRequest req = LoginRequest.builder().username("bwocbao").password("124").build();
-        when(userRepository.findByUsername("bwocbao")).thenReturn(Optional.of(User.builder()
-                .username("bwocbao").password("encoded123").role(Role.ROLE_USER).build()));
-        when(passwordEncoder.matches("124", "encoded123")).thenReturn(false);
+        LoginRequest req = LoginRequest.builder()
+                .username("bwocbao")
+                .password("124")
+                .build();
 
-        assertThatThrownBy(()->authService.login(req))
+        when(userRepository.findByUsername("bwocbao"))
+                .thenReturn(Optional.of(
+                        User.builder()
+                                .username("bwocbao")
+                                .password("encoded123")
+                                .role(Role.ROLE_USER)
+                                .build()
+                ));
+
+        when(passwordEncoder.matches("124", "encoded123"))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> authService.login(req))
                 .isInstanceOf(UnAuthorizedException.class)
                 .hasMessageContaining("Wrong password");
 
         verify(userRepository).findByUsername("bwocbao");
         verify(passwordEncoder).matches("124", "encoded123");
+
         verifyNoMoreInteractions(userRepository, passwordEncoder);
-        verifyNoInteractions(jwtUtil);
+        verifyNoInteractions(jwtUtil, outboxService);
     }
 
     @Test
     void registerRole_success_whenRoleIsValid() {
-
         RegisterRoleRequest req = RegisterRoleRequest.builder()
                 .username("admin1")
                 .password("123")
@@ -178,10 +195,7 @@ class AuthServiceTest {
         when(passwordEncoder.encode("123"))
                 .thenReturn("encoded123");
 
-        doNothing().when(userServiceClient).syncUser(anyString());
-
-        ArgumentCaptor<User> userCaptor =
-                ArgumentCaptor.forClass(User.class);
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
 
         when(userRepository.save(userCaptor.capture()))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -197,16 +211,18 @@ class AuthServiceTest {
         verify(userRepository).findByUsername("admin1");
         verify(passwordEncoder).encode("123");
         verify(userRepository).save(any(User.class));
-        verify(userServiceClient).syncUser("admin1");
-    }
+        verify(outboxService).saveUserRegisteredEvent("admin1");
 
+        verifyNoMoreInteractions(userRepository, passwordEncoder, outboxService);
+        verifyNoInteractions(jwtUtil);
+    }
 
     @Test
     void registerRole_fail_whenUsernameExists() {
         RegisterRoleRequest req = RegisterRoleRequest.builder()
                 .username("admin1")
                 .password("123")
-                .role("admin")
+                .role("ROLE_ADMIN")
                 .build();
 
         when(userRepository.findByUsername("admin1"))
@@ -218,7 +234,7 @@ class AuthServiceTest {
 
         verify(userRepository).findByUsername("admin1");
         verifyNoMoreInteractions(userRepository);
-        verifyNoInteractions(passwordEncoder, jwtUtil);
+        verifyNoInteractions(passwordEncoder, jwtUtil, outboxService);
     }
 
     @Test
@@ -226,7 +242,7 @@ class AuthServiceTest {
         RegisterRoleRequest req = RegisterRoleRequest.builder()
                 .username("user1")
                 .password("123")
-                .role("superman") // không tồn tại
+                .role("superman")
                 .build();
 
         when(userRepository.findByUsername("user1"))
@@ -238,6 +254,6 @@ class AuthServiceTest {
 
         verify(userRepository).findByUsername("user1");
         verifyNoMoreInteractions(userRepository);
-        verifyNoInteractions(passwordEncoder, jwtUtil);
+        verifyNoInteractions(passwordEncoder, jwtUtil, outboxService);
     }
 }

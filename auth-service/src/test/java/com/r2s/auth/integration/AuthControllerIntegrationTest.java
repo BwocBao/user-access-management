@@ -1,10 +1,10 @@
 package com.r2s.auth.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.r2s.auth.client.UserServiceClient;
 import com.r2s.auth.dto.LoginRequest;
 import com.r2s.auth.dto.RegisterRequest;
 import com.r2s.auth.dto.RegisterRoleRequest;
+import com.r2s.auth.messaging.OutboxService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,84 +23,69 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
-public class AuthControllerIntegrationTest {
+class AuthControllerIntegrationTest {
+
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ObjectMapper objectMapper;
-    @MockBean
-    private UserServiceClient userServiceClient;
 
-//  Trước khi chạy MỖI test case → xóa sạch dữ liệu trong DB. Vẫn tái sử dụng docker container
     @Autowired
     private JdbcTemplate jdbcTemplate;
-    @BeforeEach
-    void cleanDatabase() {
-        jdbcTemplate.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
-    }
-// setup cho stub cho userServiceClient
-    @BeforeEach
-    void setup() {
-        doNothing().when(userServiceClient).syncUser(anyString());
-    }
-    // ============================
-    // PostgreSQL Container
-    // ============================
-    @Container//Nói với JUnit:"Thằng này là container→tự start/stop cho tao".Không cần viết:postgres.start();/postgres.stop();
+
+    @MockBean
+    private OutboxService outboxService;
+
+    @Container
     static PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgres:16-alpine")
                     .withDatabaseName("test_db")
                     .withUsername("postgres")
                     .withPassword("123456");
 
-    // ============================
-    // Inject DB config cho Spring
-    // ============================
-    //URL, port… đều RANDOM mỗi lần chạy. Không thể hardcode.
-    @DynamicPropertySource//Để inject runtime config.Chạy trước khi Spring Context init.Override application.yml.
+    @DynamicPropertySource
     static void overrideProps(DynamicPropertyRegistry registry) {
-
-        registry.add("spring.datasource.url",
-                postgres::getJdbcUrl);
-
-        registry.add("spring.datasource.username",
-                postgres::getUsername);
-
-        registry.add("spring.datasource.password",
-                postgres::getPassword);
-
-        registry.add("spring.jpa.hibernate.ddl-auto",
-                () -> "update");
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
 
-    // ============================
-    // TEST HELLO
-    // ============================
-    @Test
-    void ping_shouldReturnHello() throws Exception {
+    @BeforeEach
+    void cleanDatabase() {
+        jdbcTemplate.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
+    }
 
+    @BeforeEach
+    void setupMocks() {
+        doNothing().when(outboxService).saveUserRegisteredEvent(anyString());
+    }
+
+    @Test
+    void hello_shouldReturnHello() throws Exception {
         mockMvc.perform(get("/api/auth/hello"))
                 .andExpect(status().isOk())
-                .andExpect(content()
-                        .string("Hello from Auth Service"));
+                .andExpect(content().string("Hello from Auth Service"));
+
+        verifyNoInteractions(outboxService);
     }
 
-
-    // ============================
-    // TEST REGISTER
-    // ============================
     @Test
     void register_shouldReturn200_whenValid() throws Exception {
-
         RegisterRequest request = new RegisterRequest();
         request.setUsername("bwocbao");
         request.setPassword("123456");
@@ -110,9 +95,9 @@ public class AuthControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message")
-                        .value("User registered successfully"));
+                .andExpect(jsonPath("$.message").value("User registered successfully"));
 
+        verify(outboxService).saveUserRegisteredEvent("bwocbao");
     }
 
     @Test
@@ -122,16 +107,38 @@ public class AuthControllerIntegrationTest {
         request.setPassword("");
 
         mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(outboxService);
+    }
+
+    @Test
+    void register_shouldReturn400_whenUsernameAlreadyExists() throws Exception {
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("bwocbao");
+        request.setPassword("123456");
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Username exist"));
+
+        verify(outboxService, times(1)).saveUserRegisteredEvent("bwocbao");
     }
 
     @Test
     void registerRole_shouldReturn200_whenValid() throws Exception {
-
         RegisterRoleRequest request = new RegisterRoleRequest();
-        request.setUsername("bwocbao");
+        request.setUsername("admin1");
         request.setPassword("123456");
         request.setRole("ROLE_ADMIN");
 
@@ -140,14 +147,13 @@ public class AuthControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message")
-                        .value("User registered successfully"));
+                .andExpect(jsonPath("$.message").value("User registered successfully"));
 
+        verify(outboxService).saveUserRegisteredEvent("admin1");
     }
 
     @Test
-    void registerRole_shouldReturn400_whenRoleInvalid() throws Exception {
-
+    void registerRole_shouldReturn400_whenInvalidRole() throws Exception {
         RegisterRoleRequest request = new RegisterRoleRequest();
         request.setUsername("bwocbao");
         request.setPassword("123456");
@@ -158,28 +164,44 @@ public class AuthControllerIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message")
-                        .value("Invalid role"));
+                .andExpect(jsonPath("$.message").value("Invalid role"));
 
+        verifyNoInteractions(outboxService);
     }
 
-    // ============================
-    // TEST LOGIN
-    // ============================
+    @Test
+    void registerRole_shouldReturn400_whenUsernameAlreadyExists() throws Exception {
+        RegisterRoleRequest request = new RegisterRoleRequest();
+        request.setUsername("bwocbao");
+        request.setPassword("123456");
+        request.setRole("ROLE_ADMIN");
+
+        mockMvc.perform(post("/api/auth/register/role")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/auth/register/role")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Username exist"));
+
+        verify(outboxService, times(1)).saveUserRegisteredEvent("bwocbao");
+    }
+
     @Test
     void login_shouldReturn200_whenValid() throws Exception {
-
-        // 1. Register trước
         RegisterRequest register = new RegisterRequest();
         register.setUsername("bwocbao");
         register.setPassword("123456");
 
         mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(register)));
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(register)))
+                .andExpect(status().isOk());
 
-
-        // 2. Login
         LoginRequest login = new LoginRequest();
         login.setUsername("bwocbao");
         login.setPassword("123456");
@@ -187,18 +209,16 @@ public class AuthControllerIntegrationTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(login)))
-
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message")
-                        .value("User logged successfully"))
-                .andExpect(jsonPath("$.data.token")
-                        .exists());
+                .andExpect(jsonPath("$.message").value("User logged successfully"))
+                .andExpect(jsonPath("$.data.token").exists());
+
+        verify(outboxService).saveUserRegisteredEvent("bwocbao");
     }
 
     @Test
-    void login_shouldReturn401_whenUsernameNotExist() throws Exception {
-        // 1. Login
+    void login_shouldReturn401_whenUsernameDoesNotExist() throws Exception {
         LoginRequest login = new LoginRequest();
         login.setUsername("bwocbao");
         login.setPassword("123456");
@@ -206,27 +226,24 @@ public class AuthControllerIntegrationTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(login)))
-
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401))
-                .andExpect(jsonPath("$.message")
-                        .value("Username does not exist"));
+                .andExpect(jsonPath("$.message").value("Username does not exist"));
+
+        verifyNoInteractions(outboxService);
     }
 
     @Test
-    void login_shouldReturn401_whenWrongPass() throws Exception {
-
-        // 1. Register trước
+    void login_shouldReturn401_whenWrongPassword() throws Exception {
         RegisterRequest register = new RegisterRequest();
         register.setUsername("bwocbao");
         register.setPassword("123456");
 
         mockMvc.perform(post("/api/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(register)));
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(register)))
+                .andExpect(status().isOk());
 
-
-        // 2. Login
         LoginRequest login = new LoginRequest();
         login.setUsername("bwocbao");
         login.setPassword("123457");
@@ -234,54 +251,10 @@ public class AuthControllerIntegrationTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(login)))
-
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401))
-                .andExpect(jsonPath("$.message")
-                        .value("Wrong password"));
-    }
+                .andExpect(jsonPath("$.message").value("Wrong password"));
 
+        verify(outboxService).saveUserRegisteredEvent("bwocbao");
+    }
 }
-//1️⃣ JUnit tạo object test như thế nào?
-//JUnit KHÔNG dùng 1 object test cho tất cả @Test.
-//Mặc định: 👉 Mỗi @Test = 1 instance mới.
-//Ví dụ:
-//class MyTest {
-//
-//    @Test
-//    void test1(){}
-//
-//    @Test
-//    void test2(){}
-//}
-//Thực tế JUnit làm:
-//  new MyTest() → chạy test1
-//  new MyTest() → chạy test2
-//Nó KHÔNG reuse object.
-//Lý do: tránh test ảnh hưởng lẫn nhau.
-//2️⃣ Nếu container KHÔNG static thì chuyện gì xảy ra?
-//Giả sử bạn viết:
-//@PostgreSQLContainer
-//PostgreSQLContainer<?> postgres =
-//        new PostgreSQLContainer<>("postgres"); (không static)
-//
-//Khi test chạy:
-//test1: new TestClass() → postgres được tạo → start docker → chạy test1 → stop
-//test2: new TestClass() → postgres tạo lại → start docker lại → chạy test2 → stop
-//Kết quả:
-//Mỗi test = 1 container
-//❌ Mỗi container start = 5–15 giây
-//❌ 10 test = 150s 😵
-//Rất chậm.
-//3️⃣ Khi dùng static thì sao?
-//static PostgreSQLContainer<?> postgres = ...
-//static = thuộc về class, không thuộc object.
-//JVM load class:
-//TestClass được load → static field init → postgres tạo 1 lần
-//Khi chạy test:
-//  new TestClass() → test1 (dùng chung postgres)
-//  new TestClass() → test2 (dùng chung postgres)
-//Thực tế: 1 container chạy N test
-//✅ Nhanh
-//✅ Tiết kiệm RAM
-//✅ Chuẩn best practice

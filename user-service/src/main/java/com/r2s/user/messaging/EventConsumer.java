@@ -13,8 +13,6 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
-
 import static com.r2s.core.messaging.RabbitConstants.*;
 
 @Service
@@ -29,85 +27,84 @@ public class EventConsumer {
     public void handle(UserRegisteredEvent event,
                        Message message,
                        Channel channel) throws Exception {
+
         long tag = message.getMessageProperties().getDeliveryTag();
+        String messageId = message.getMessageProperties().getMessageId();
+        String username = event.getUsername();
 
         try {
-            String msgId = message.getMessageProperties().getMessageId();
+            log.info("Processing user registered event: messageId={}, username={}", messageId, username);
 
-            log.info("Processing messageId={} username={}", msgId, event.getUsername());
-
-            // =========================
-            // IDEMPOTENT CHECK
-            // =========================
-            if (userRepository.existsByUsername(event.getUsername())) {
+            if (userRepository.existsByUsername(username)) {
+                log.info("User profile already exists, skip create: messageId={}, username={}", messageId, username);
                 channel.basicAck(tag, false);
                 return;
             }
 
             UserProfile newUser = new UserProfile();
-            newUser.setUsername(event.getUsername());
+            newUser.setUsername(username);
             newUser.setFullName("");
             newUser.setEmail("");
 
             userRepository.saveAndFlush(newUser);
 
-            // ✅ ACK
+            log.info("User profile created successfully: messageId={}, username={}", messageId, username);
             channel.basicAck(tag, false);
 
-        }
-        catch (DataIntegrityViolationException e) {
-            log.warn("Duplicate user detected: {}", event.getUsername());
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Duplicate user detected, ack as idempotent success: messageId={}, username={}", messageId, username);
             channel.basicAck(tag, false);
-        }
-        catch (Exception e) {
 
-            // =========================
-            // RETRY COUNT
-            // =========================
-            Object retryObj = message.getMessageProperties()
-                    .getHeaders()
-                    .get(HEADER_CONSUME_RETRY_COUNT);
-
-            int retryCount = Optional.ofNullable(retryObj)
-                    .filter(Integer.class::isInstance)
-                    .map(Integer.class::cast)
-                    .orElse(0);
+        } catch (Exception e) {
+            int retryCount = extractRetryCount(message);
 
             if (retryCount < MAX_RETRY) {
+                int nextRetry = retryCount + 1;
 
-                log.warn("Retrying message, attempt {}", retryCount + 1);
+                log.warn(
+                        "Consume failed, send to retry exchange: attempt={}, messageId={}, username={}, error={}",
+                        nextRetry, messageId, username, e.getMessage()
+                );
 
-                Message newMessage = MessageBuilder
+                Message retryMessage = MessageBuilder
                         .fromMessage(message)
-                        .setHeader(HEADER_CONSUME_RETRY_COUNT, retryCount + 1)
+                        .setHeader(HEADER_CONSUME_RETRY_COUNT, nextRetry)
                         .build();
 
-                // =========================
-                // SEND TO RETRY
-                // =========================
                 rabbitTemplate.send(
                         USER_RETRY_EXCHANGE,
                         USER_REGISTERED_RETRY_ROUTING,
-                        newMessage
+                        retryMessage
                 );
 
                 channel.basicAck(tag, false);
-
-            } else {
-
-                log.error("Max retry reached → send to DLQ: {}", event.getUsername());
-
-                // =========================
-                // SEND TO DLQ
-                // =========================
-                rabbitTemplate.send(
-                        USER_DLQ_EXCHANGE,
-                        USER_REGISTERED_DLQ_ROUTING,
-                        message
-                );
-
-                channel.basicAck(tag, false); // không reject nữa
+                return;
             }
+
+            log.error(
+                    "Max retry reached, send to DLQ: messageId={}, username={}, error={}",
+                    messageId, username, e.getMessage(), e
+            );
+
+            rabbitTemplate.send(
+                    USER_DLQ_EXCHANGE,
+                    USER_REGISTERED_DLQ_ROUTING,
+                    message
+            );
+
+            channel.basicAck(tag, false);
         }
+    }
+
+    private int extractRetryCount(Message message) {
+        Object retryObj = message.getMessageProperties()
+                .getHeaders()
+                .get(HEADER_CONSUME_RETRY_COUNT);
+
+        if (retryObj instanceof Number number) {
+            return number.intValue();
+        }
+
+        return 0;
     }
 }

@@ -2,137 +2,127 @@ package com.r2s.core.messaging;
 
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import static com.r2s.core.messaging.RabbitConstants.*;
-
+/*
+ * Class cấu hình RabbitMQ dùng chung cho hệ thống.
+ *
+ * Nhiệm vụ chính:
+ * 1. Tạo ConnectionFactory để kết nối tới RabbitMQ
+ * 2. Tạo JSON converter để convert object <-> message
+ * 3. Tạo RabbitTemplate để publish message
+ * 4. Gắn callback để xử lý kết quả publish (ACK / NACK / RETURNED)
+ */
 @Configuration
 @Slf4j
 public class RabbitConfig {
 
+    /*
+     * Tạo ConnectionFactory kết nối tới RabbitMQ.
+     * Các giá trị host, port, username, password lấy từ application.yml
+     * @Value("${spring.rabbitmq.host}")       -> lấy host
+     * @Value("${spring.rabbitmq.port:5672}")  -> lấy port, mặc định 5672 nếu không cấu hình
+     * @Value("${spring.rabbitmq.username}")   -> lấy username
+     * @Value("${spring.rabbitmq.password}")   -> lấy password
+     */
     @Bean
     public CachingConnectionFactory connectionFactory(
             @Value("${spring.rabbitmq.host}") String host,
+            @Value("${spring.rabbitmq.port:5672}") int port,
             @Value("${spring.rabbitmq.username}") String username,
             @Value("${spring.rabbitmq.password}") String password) {
 
-        CachingConnectionFactory factory = new CachingConnectionFactory(host);
+        /*
+         * CachingConnectionFactory: Spring wrapper cho RabbitMQ connection.
+         * Nó giúp tái sử dụng connection/channel thay vì tạo mới liên tục, nhờ đó hiệu năng tốt hơn.
+         */
+        CachingConnectionFactory factory = new CachingConnectionFactory(host, port);
         factory.setUsername(username);
         factory.setPassword(password);
 
+        /*
+         * Publisher Confirm:
+         * cho phép publisher biết broker đã nhận message hay chưa.
+         * CORRELATED nghĩa là có hỗ trợ correlation data, giúp biết ACK/NACK này thuộc message nào.
+         * Đây là phần rất quan trọng trong Outbox Pattern,
+         * vì sau khi publish xong phải biết record outbox nào được mark SENT.
+         */
         factory.setPublisherConfirmType(CachingConnectionFactory.ConfirmType.CORRELATED);
+
+        /*
+         * Publisher Returns:
+         * bật cơ chế trả message về nếu message tới exchange nhưng không route được tới queue nào.
+         * Ví dụ:
+         * - exchange tồn tại
+         * - nhưng routing key sai
+         * -> message bị returned
+         */
         factory.setPublisherReturns(true);
 
         return factory;
     }
 
+    /*
+     * Converter dùng Jackson để tự động convert:
+     * - Java object -> JSON message khi gửi
+     * - JSON message -> Java object khi nhận
+     */
     @Bean
     public Jackson2JsonMessageConverter converter() {
         return new Jackson2JsonMessageConverter();
     }
 
-    @Bean
-    public RabbitTemplate retryRabbitTemplate(CachingConnectionFactory cf,
-                                              Jackson2JsonMessageConverter converter) {
-
-        RabbitTemplate template = new RabbitTemplate(cf);
-        template.setMessageConverter(converter);
-
-        // ✅ QUAN TRỌNG: gắn callback cho retry template
-        template.setConfirmCallback((cd, ack, cause) ->
-                handleRetry(template, cd, ack, cause)
-        );
-
-        return template;
-    }
-
+    /*
+     * Tạo RabbitTemplate để publish message.
+     * RabbitTemplate giống như "client" để gửi message sang RabbitMQ.
+     */
     @Bean
     public RabbitTemplate rabbitTemplate(CachingConnectionFactory cf,
                                          Jackson2JsonMessageConverter converter,
-                                         RabbitTemplate retryRabbitTemplate) {
+                                         OutboxConfirmHandler outboxConfirmHandler) {
 
         RabbitTemplate template = new RabbitTemplate(cf);
+
+        /*
+         * Gắn JSON converter để tự động serialize object khi gửi.
+         */
         template.setMessageConverter(converter);
 
+        /*
+         * mandatory = true:
+         * nếu exchange nhận được message nhưng không route tới queue nào,
+         * RabbitMQ sẽ trả message về qua ReturnsCallback.
+         * Nếu không bật mandatory,
+         * có thể message bị "rơi" mà publisher không biết.
+         */
         template.setMandatory(true);
 
-        // ✅ callback chính
-        template.setConfirmCallback((cd, ack, cause) ->
-                handleRetry(retryRabbitTemplate, cd, ack, cause)
-        );
+        /*
+         * ConfirmCallback:
+         * callback khi broker phản hồi ACK hoặc NACK cho message publisher gửi lên.
+         * Nếu ACK:
+         * broker đã nhận message
+         * Nếu NACK:
+         * broker không nhận được message
+         * Ở đây chuyển xử lý sang OutboxConfirmHandler.
+         */
+        template.setConfirmCallback(outboxConfirmHandler::handleConfirm);
 
-        template.setReturnsCallback(returned -> {
-
-            Message message = returned.getMessage();
-            String messageId = message.getMessageProperties().getMessageId();
-
-            log.error(
-                    "Routing failed: messageId={}, exchange={}, routingKey={}, reason={}",
-                    messageId,
-                    returned.getExchange(),
-                    returned.getRoutingKey(),
-                    returned.getReplyText()
-            );
-        });
+        /*
+         * ReturnsCallback:
+         * callback khi message đã tới exchange
+         * nhưng exchange không route được message tới queue nào.
+         * Ví dụ routing key sai.
+         * Ở đây chuyển xử lý sang OutboxConfirmHandler.
+         */
+        template.setReturnsCallback(outboxConfirmHandler::handleReturned);
 
         return template;
-    }
-
-    // =========================
-    // 🔥 CORE RETRY LOGIC
-    // =========================
-    private void handleRetry(RabbitTemplate template,
-                             CorrelationData correlationData,
-                             boolean ack,
-                             String cause) {
-
-        if (ack) return;
-
-        log.error("Publish failed: cause={}", cause);
-
-        if (correlationData instanceof CustomCorrelationData cd) {
-
-            Message message = cd.getMessage();
-            if (message == null) return;
-
-            String exchange = cd.getExchange();
-            String routingKey = cd.getRoutingKey();
-
-            Integer retry = (Integer) message.getMessageProperties()
-                    .getHeaders()
-                    .getOrDefault(HEADER_PUBLISH_RETRY_COUNT, 0);
-
-            if (retry < MAX_RETRY) {
-
-                int nextRetry = retry + 1;
-
-                message.getMessageProperties()
-                        .getHeaders()
-                        .put(HEADER_PUBLISH_RETRY_COUNT, nextRetry);
-
-                log.warn("Retry publish attempt {}", nextRetry);
-
-                try {
-                    // (optional) delay nhẹ tránh spam
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-//                template.send(USER_EXCHANGE, routingKey, message, correlationData);
-                template.send(exchange, routingKey, message, correlationData);
-
-            } else {
-
-                log.error("Drop message after max retry. cause={}", cause);
-            }
-        }
     }
 
     @PostConstruct

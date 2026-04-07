@@ -58,12 +58,6 @@ public class RabbitConstants {
     public static final String QUEUE_SUFFIX = ".queue";
     public static final String RETRY_QUEUE_SUFFIX = ".retry.queue";
     public static final String DLQ_QUEUE_SUFFIX = ".dlq.queue";
-    //    USER_DELETED_QUEUE
-//    USER_DELETED_DLQ_ROUTING
-//    USER_DELETED_ROUTING
-//    USER_DELETED_DLQ_QUEUE
-//    USER_DELETED_RETRY_QUEUE
-//    USER_DELETED_RETRY_ROUTING
     // ===== EXCHANGE =====
     public static final String USER_EXCHANGE = USER + EXCHANGE_SUFFIX;
     public static final String USER_RETRY_EXCHANGE = USER + EXCHANGE_SUFFIX_RETRY;

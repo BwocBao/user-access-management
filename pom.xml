@@ -100,12 +100,8 @@
                             <excludes>
                                 <exclude>**/dto/**</exclude>
                                 <exclude>**/entity/**</exclude>
-<!--                                <exclude>**/config/**</exclude>-->
                                 <exclude>**/*Application*</exclude>
-<!--                                <exclude>**/controller/RoleController*</exclude>-->
-<!--                                <exclude>**/controller/InternalAuthController*</exclude>-->
-<!--                                <exclude>**/controller/InternalUserController*</exclude>-->
-                                <exclude>**/client/**</exclude>
+                                <exclude>**/messaging/event/**</exclude>
                             </excludes>
                         </configuration>
 
@@ -124,10 +120,7 @@
                                 <exclude>**/dto/**</exclude>
                                 <exclude>**/entity/**</exclude>
                                 <exclude>**/*Application*</exclude>
-<!--                                <exclude>**/controller/RoleController*</exclude>-->
-<!--                                <exclude>**/controller/InternalAuthController*</exclude>-->
-<!--                                <exclude>**/controller/InternalUserController*</exclude>-->
-                                <exclude>**/client/**</exclude>
+                                <exclude>**/messaging/event/**</exclude>
                             </excludes>
                             <rules>
                                 <rule>
