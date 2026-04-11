@@ -32,9 +32,9 @@ RUN addgroup -S userservicegroup
 RUN adduser -S userserviceuser -G userservicegroup
 #tạo thư mục /app code sẽ chạy trong đây
 WORKDIR /app
-#copy file jar từ stage 1(builder) qua thư mục app đặt tên là auth-service.jar
+#copy file jar từ stage 1(builder) qua thư mục app đặt tên là user-service.jar
 COPY --from=builder /app/user-service/target/*.jar user-service.jar
-#đổi qua user authserviceuser để chạy app đảm bảo security ko sài root
+#đổi qua user userserviceuser để chạy app đảm bảo security ko sài root
 RUN chown -R userserviceuser:userservicegroup /app
 USER userserviceuser
 #port mà app chạy(tượng trưng)

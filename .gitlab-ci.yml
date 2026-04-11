@@ -1,151 +1,412 @@
+# Dùng image Maven + JDK 17 làm môi trường mặc định cho các job.
+# Nghĩa là nếu job nào không khai báo image riêng thì sẽ chạy trong container này.
 image: maven:3.9.6-eclipse-temurin-17
 
+
+# services = các container phụ trợ được GitLab bật lên cùng job.
+# Chúng không phải job riêng, mà là "dịch vụ đi kèm" để job chính dùng.
+# Ở đây ta bật PostgreSQL để test/service có DB thật.
 services:
-  #tương đương docker run postgres:15
   - name: postgres:15
-    #Container của postgres sẽ được gọi bằng tên: postgres-db
+    # alias = hostname để container job chính gọi sang service này.
+    # Ví dụ app/test có thể connect tới postgres bằng host: postgres-db
     alias: postgres-db
+
 
 variables:
   POSTGRES_USER: postgres
+
   POSTGRES_PASSWORD: postgres
+
   AUTH_DB: auth_service
+
   USER_DB: user_service
+
   SPRING_PROFILES_ACTIVE: ci
-  #Chỉ định Maven lưu dependency vào: .m2/repository. Thay vì ~/.m2=> Để cache được.
+
+  # MAVEN_OPTS này chỉ định Maven lưu dependency vào .m2/repository trong workspace project
+  # thay vì lưu trong ~/.m2 của container.
+  # Lý do:
+  # - GitLab cache được thư mục .m2/repository
+  # - job sau không phải tải dependency lại từ đầu
+  # - pipeline nhanh hơn
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
 
+  APP_NAME: auth-service
+
+  # Đường dẫn jar sẽ dùng ở deploy stage
+  # Ở đây ta muốn deploy auth-service nên trỏ vào auth-service/target/*.jar
+  JAR_PATH: auth-service/target/*.jar
+
+
+# cache dùng để tăng tốc pipeline
+# Khác với artifact:
+# - cache: tái sử dụng dependency/tool giữa nhiều job/pipeline
+# - artifact: truyền output cụ thể của 1 job sang job khác
 cache:
   key: maven-cache
   paths:
     - .m2/repository
 
+
+# stages định nghĩa thứ tự logic của pipeline.
+# GitLab sẽ chạy:
+# 1) test
+# 2) build
+# 3) deploy
+#
+# Nghĩa là:
+# - test fail => build không chạy
+# - build fail => deploy không chạy
 stages:
-  - build
   - test
+  - build
   - deploy
 
-# ================= BUILD =================
-build-job:
-  stage: build
-  tags:
-    - local
-  script:
-    - chmod +x mvnw
-    - ./mvnw clean install -DskipTests
-  artifacts:
-    #Lưu file build được để stage sau dùng.
-    paths:
-      - auth-service/target/*.jar
-      - user-service/target/*.jar
-    #Sau 1 giờ sẽ xóa.
-    expire_in: 1 hour
 
 # ================= TEST =================
 test-job:
+  # Job này thuộc stage test
   stage: test
-  image: maven:3.9.6-eclipse-temurin-17
+
+  # tags để GitLab chọn đúng runner có tag "local"
+  # Nếu runner của bạn không có tag local thì job này không được nhận.
   tags:
     - local
 
-  services:
-    - name: docker:24.0.7-dind
-      alias: docker
-    - name: postgres:15
-      alias: postgres-db
+  # before_script = các lệnh chuẩn bị môi trường trước phần script chính
+  before_script:
+    # Vì project thực tế đang nằm trong thư mục user-access-management
+    # nên ta cd vào đó trước khi chạy Maven.
+    - cd user-access-management
 
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-    DOCKER_DRIVER: overlay2
-    TESTCONTAINERS_HOST_OVERRIDE: docker
+    # Cấp quyền thực thi cho Maven Wrapper
+    - chmod +x mvnw
+
+    # Cài thêm công cụ cần dùng trong job:
+    # - curl: để tải script wait-for-it
+    # - postgresql-client: để có lệnh psql, dùng kiểm tra/tạo DB
+    - apt-get update && apt-get install -y curl postgresql-client
+
+    # Tải script wait-for-it từ GitHub.
+    # Script này giúp chờ tới khi postgres-db mở cổng 5432 xong mới chạy tiếp.
+    # Nếu không chờ, có thể job chạy quá sớm và bị lỗi "connection refused".
+    - curl -sSL https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -o wait-for-it.sh
+
+    # Cho phép thực thi script vừa tải
+    - chmod +x wait-for-it.sh
+
+    # Chờ postgres-db:5432 tối đa 60 giây
+    # Nếu DB đã sẵn sàng thì in ra "postgres-db is up"
+    - ./wait-for-it.sh postgres-db:5432 -t 60 -- echo "postgres-db is up"
+
+    # Export biến PGPASSWORD để lệnh psql tự dùng password,
+    # không cần nhập tay.
+    - export PGPASSWORD="$POSTGRES_PASSWORD"
+
+    # Block shell nhiều dòng.
+    # Mục tiêu:
+    # - kiểm tra xem auth_service và user_service đã tồn tại chưa
+    # - nếu chưa có thì tạo mới
+    - |
+      for DB in "$AUTH_DB" "$USER_DB"; do
+        echo "Ensuring database '$DB' exists..."
+        psql -h postgres-db -U "$POSTGRES_USER" -tc "SELECT 1 FROM pg_database WHERE datname = '$DB'" | grep -q 1 || \
+        psql -h postgres-db -U "$POSTGRES_USER" -c "CREATE DATABASE \"$DB\""
+      done
 
   script:
-    - chmod +x mvnw
-    - ./mvnw test
+    # Build riêng module core trước, nhưng bỏ test
+    # -pl core = chỉ build module core
+    # Điều này hữu ích nếu auth-service và user-service phụ thuộc vào core.
+    - ./mvnw clean install -pl core -DskipTests
+
+    # Chạy test cho auth-service
+    # -pl auth-service = chỉ chạy trên module auth-service
+    - ./mvnw test -pl auth-service
+
+    # Chạy test cho user-service
+    - ./mvnw test -pl user-service
+
   artifacts:
+    # when: always nghĩa là kể cả test fail,
+    # GitLab vẫn cố lấy report test ra để hiển thị
     when: always
+
     reports:
       junit:
-        - auth-service/target/surefire-reports/*.xml
-        - user-service/target/surefire-reports/*.xml
-# ================= DEPLOY =================
-deploy-job:
-  stage: deploy
-  image: docker:24
-  services:
-    - name: docker:dind
-      alias: docker
+        # Đây là đường dẫn tới file test report JUnit XML
+        # GitLab sẽ đọc các file này để show kết quả test trong UI
+        - user-access-management/auth-service/target/surefire-reports/*.xml
+        - user-access-management/user-service/target/surefire-reports/*.xml
+
+
+# ================= BUILD =================
+build-job:
+  # Job này thuộc stage build
+  stage: build
+
   tags:
     - local
+
+  script:
+    # Vào thư mục project
+    - cd user-access-management
+
+    # Cấp quyền chạy Maven Wrapper
+    - chmod +x mvnw
+
+    # Build toàn bộ project nhưng bỏ qua test
+    # Vì test đã chạy ở stage trước rồi.
+    #
+    # Mục tiêu của stage này:
+    # - đóng gói project
+    # - sinh ra file .jar
+    - ./mvnw clean package -DskipTests
+
+  artifacts:
+    # Đây là chỗ rất quan trọng.
+    # build-job sinh ra các file jar và GitLab lưu chúng lại làm artifact.
+    #
+    # Artifact chính là output cụ thể của stage build.
+    # Job sau (deploy) có thể lấy đúng các file này để dùng lại.
+    paths:
+      - user-access-management/core/target/*.jar
+      - user-access-management/auth-service/target/*.jar
+      - user-access-management/user-service/target/*.jar
+
+    # Artifact sẽ hết hạn sau 1 giờ
+    # Tránh lưu mãi làm tốn storage
+    expire_in: 1 hour
+
+
+# ================= DEPLOY =================
+deploy-job:
+  # Job này thuộc stage deploy
+  stage: deploy
+
+  # Riêng job deploy ta không dùng Maven image nữa,
+  # mà dùng Docker CLI image để chạy docker run
+  image: docker:24
+
+  # Bật Docker-in-Docker (dind)
+  # Tức là job này có một Docker daemon riêng để nhận lệnh docker
+  services:
+    - name: docker:24-dind
+      alias: docker
+
+  tags:
+    - local
+
   variables:
+    # Nói với Docker CLI rằng Docker daemon nằm ở service tên "docker", cổng 2375
     DOCKER_HOST: tcp://docker:2375
+
+    # Tắt TLS cert dir để đơn giản hoá cấu hình dind
     DOCKER_TLS_CERTDIR: ""
+
+  # dependencies = job này muốn lấy artifact từ build-job
+  #
+  # Đây chính là liên kết dữ liệu giữa stage build và stage deploy.
+  # Không có dòng này thì deploy-job có thể không có đúng file jar đã build.
   dependencies:
     - build-job
+
+  # only: main nghĩa là deploy chỉ chạy khi push vào branch main
+  # branch khác vẫn có thể test/build nhưng không deploy
   only:
     - main
-    - part-9
+
   script:
-    # Dừng stack cũ (nếu có)
-    - docker compose down || true
-    # Build lại image + chạy lên
-    - docker compose up -d --build
+    # Vào thư mục project
+    - cd user-access-management
 
+    # Tìm file jar đầu tiên khớp với pattern auth-service/target/*.jar
+    # rồi gán vào biến JAR_FILE
+    #
+    # Ví dụ sau build có thể ra:
+    # auth-service/target/auth-service-0.0.1-SNAPSHOT.jar
+    - JAR_FILE=$(ls $JAR_PATH | head -n 1)
 
+    # In ra để debug xem job đang dùng file jar nào
+    - echo "Using jar: $JAR_FILE"
 
+    # Nếu container cũ đã tồn tại thì xóa nó đi trước
+    # || true để nếu không có container cũng không làm job fail
+    - docker rm -f "$APP_NAME" || true
 
+    # Chạy container Java mới
+    #
+    # Giải thích từng phần:
+    # -d                  : chạy background
+    # --name "$APP_NAME"  : đặt tên container
+    # -p 8080:8080        : map port 8080 host -> 8080 container
+    # -v ...:/app.jar     : mount file jar từ workspace CI vào container
+    #
+    # Image dùng ở đây là JDK 17 Ubuntu của Microsoft
+    # Và command chạy trong container là:
+    # java -jar /app.jar
+    #
+    # Đây chính là artifact-centered deploy:
+    # - build stage tạo jar
+    # - deploy stage lấy đúng jar đó
+    # - chạy container Java từ jar đã build
+    - |
+      docker run -d \
+        --name "$APP_NAME" \
+        -p 8080:8080 \
+        -v "$CI_PROJECT_DIR/user-access-management/$JAR_FILE:/app.jar" \
+        mcr.microsoft.com/openjdk/jdk:17-ubuntu \
+        java -jar /app.jar
 
-
-#test-job:
-#  stage: test
+#image: maven:3.9.6-eclipse-temurin-17
+#
+#services:
+#  #tương đương docker run postgres:15
+#  - name: postgres:15
+#    #Container của postgres sẽ được gọi bằng tên: postgres-db
+#    alias: postgres-db
+#
+#variables:
+#  POSTGRES_USER: postgres
+#  POSTGRES_PASSWORD: postgres
+#  AUTH_DB: auth_service
+#  USER_DB: user_service
+#  SPRING_PROFILES_ACTIVE: ci
+#  #Chỉ định Maven lưu dependency vào: .m2/repository. Thay vì ~/.m2=> Để cache được.
+#  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+#
+#cache:
+#  key: maven-cache
+#  paths:
+#    - .m2/repository
+#
+#stages:
+#  - build
+#  - test
+#  - deploy
+#
+## ================= BUILD =================
+#build-job:
+#  stage: build
 #  tags:
 #    - local
-#  before_script:
-#    #postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
-#    - apt-get update && apt-get install -y postgresql-client curl
-#    #Tải script từ GitHub. Option:-s silent. -S show error. -L follow redirect. -o output file
-#    - curl -sSL https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -o wait-for-it.sh
-#    - chmod +x wait-for-it.sh
-#    #Chờ postgres-db port 5432. Timeout 60 giây
-#    - ./wait-for-it.sh postgres-db:5432 -t 60 -- echo "postgres-db is up"
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw clean install -DskipTests
+#  artifacts:
+#    #Lưu file build được để stage sau dùng.
+#    paths:
+#      - auth-service/target/*.jar
+#      - user-service/target/*.jar
+#    #Sau 1 giờ sẽ xóa.
+#    expire_in: 1 hour
 #
-#    # Tạo DB nếu chưa tồn tại
-#    - export PGPASSWORD=$POSTGRES_PASSWORD
-#    #-h postgres-db → connect tới service postgres. -U → user. -t → chỉ output kết quả. -c → chạy câu lệnh SQL
-#    #Nếu select ra 1 thì sẽ grep ra được và thoát ko tạo db. Ngược lại chưa có db thì tạo db
-#    - |
-#      for DB in "$AUTH_DB" "$USER_DB"; do
-#        echo "Checking database $DB"
-#        psql -h postgres-db -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$DB'" | grep -q 1 || \
-#        psql -h postgres-db -U $POSTGRES_USER -c "CREATE DATABASE \"$DB\""
-#      done
+## ================= TEST =================
+#test-job:
+#  stage: test
+#  image: maven:3.9.6-eclipse-temurin-17
+#  tags:
+#    - local
+#
+#  services:
+#    - name: docker:24.0.7-dind
+#      alias: docker
+#    - name: postgres:15
+#      alias: postgres-db
+#
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#    DOCKER_TLS_CERTDIR: ""
+#    DOCKER_DRIVER: overlay2
+#    TESTCONTAINERS_HOST_OVERRIDE: docker
 #
 #  script:
-#    # KHÔNG clean nữa
-#    # Chỉ chạy test\
 #    - chmod +x mvnw
-#    - ./mvnw test -e || true
-#    - echo "==== LIST REPORT FILES ===="
-#    - ls -R auth-service/target || true
-#    - echo "==== PRINT REPORTS ===="
-#    - find auth-service/target -name "*.txt" -exec cat {} \; || true
-#    - exit 1
-
-
-
-
-
-#  ❌ Không dùng |
-#- echo hello
-#- echo world
-# → 2 command tách biệt.
-#  ✅ Dùng |
-#- |
-#  echo hello
-#  echo world
-#  → GitLab hiểu đây là 1 block shell script nhiều dòng
-
-#\
-#ở cuối dòng nghĩa là:
-#“Dòng này chưa kết thúc, nối tiếp sang dòng dưới.”
+#    - ./mvnw test
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - auth-service/target/surefire-reports/*.xml
+#        - user-service/target/surefire-reports/*.xml
+## ================= DEPLOY =================
+#deploy-job:
+#  stage: deploy
+#  image: docker:24
+#  services:
+#    - name: docker:dind
+#      alias: docker
+#  tags:
+#    - local
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#    DOCKER_TLS_CERTDIR: ""
+#  dependencies:
+#    - build-job
+#  only:
+#    - main
+#    - part-9
+#  script:
+#    # Dừng stack cũ (nếu có)
+#    - docker compose down || true
+#    # Build lại image + chạy lên
+#    - docker compose up -d --build
+#
+#
+#
+#
+#
+#
+##test-job:
+##  stage: test
+##  tags:
+##    - local
+##  before_script:
+##    #postgresql-client → để dùng lệnh psql. curl → để tải script wait-for-it
+##    - apt-get update && apt-get install -y postgresql-client curl
+##    #Tải script từ GitHub. Option:-s silent. -S show error. -L follow redirect. -o output file
+##    - curl -sSL https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -o wait-for-it.sh
+##    - chmod +x wait-for-it.sh
+##    #Chờ postgres-db port 5432. Timeout 60 giây
+##    - ./wait-for-it.sh postgres-db:5432 -t 60 -- echo "postgres-db is up"
+##
+##    # Tạo DB nếu chưa tồn tại
+##    - export PGPASSWORD=$POSTGRES_PASSWORD
+##    #-h postgres-db → connect tới service postgres. -U → user. -t → chỉ output kết quả. -c → chạy câu lệnh SQL
+##    #Nếu select ra 1 thì sẽ grep ra được và thoát ko tạo db. Ngược lại chưa có db thì tạo db
+##    - |
+##      for DB in "$AUTH_DB" "$USER_DB"; do
+##        echo "Checking database $DB"
+##        psql -h postgres-db -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname='$DB'" | grep -q 1 || \
+##        psql -h postgres-db -U $POSTGRES_USER -c "CREATE DATABASE \"$DB\""
+##      done
+##
+##  script:
+##    # KHÔNG clean nữa
+##    # Chỉ chạy test\
+##    - chmod +x mvnw
+##    - ./mvnw test -e || true
+##    - echo "==== LIST REPORT FILES ===="
+##    - ls -R auth-service/target || true
+##    - echo "==== PRINT REPORTS ===="
+##    - find auth-service/target -name "*.txt" -exec cat {} \; || true
+##    - exit 1
+#
+#
+#
+#
+#
+##  ❌ Không dùng |
+##- echo hello
+##- echo world
+## → 2 command tách biệt.
+##  ✅ Dùng |
+##- |
+##  echo hello
+##  echo world
+##  → GitLab hiểu đây là 1 block shell script nhiều dòng
+#
+##\
+##ở cuối dòng nghĩa là:
+##“Dòng này chưa kết thúc, nối tiếp sang dòng dưới.”
