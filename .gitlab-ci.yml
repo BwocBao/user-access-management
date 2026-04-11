@@ -41,9 +41,8 @@ test-job:
         psql -h postgres-db -U "$POSTGRES_USER" -c "CREATE DATABASE \"$DB\""
       done
   script:
-    - ./mvnw clean install -pl core -DskipTests
-    - ./mvnw test -pl auth-service
-    - ./mvnw test -pl user-service
+    - ./mvnw test -pl auth-service -am
+    - ./mvnw test -pl user-service -am
   artifacts:
     when: always
     reports:
