@@ -69,6 +69,7 @@ deploy-job:
     - build-job
   only:
     - main
+    - review/r4
   script:
     - 'AUTH_JAR=$(ls auth-service/target/*.jar | head -n 1)'
     - 'USER_JAR=$(ls user-service/target/*.jar | head -n 1)'
