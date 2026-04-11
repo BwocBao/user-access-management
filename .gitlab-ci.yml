@@ -1,17 +1,10 @@
 image: maven:3.9.6-eclipse-temurin-17
 
-services:
-  - name: postgres:15
-    alias: postgres-db
-
 variables:
-  POSTGRES_USER: postgres
-  POSTGRES_PASSWORD: 2014giadinh
-  AUTH_DB: auth_service
-  USER_DB: user_service
-  SPRING_PROFILES_ACTIVE: ci
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-  APP_NAME: auth-service
+  SPRING_PROFILES_ACTIVE: ci
+  AUTH_APP_NAME: auth-service
+  USER_APP_NAME: user-service
 
 cache:
   key: maven-cache
@@ -25,22 +18,19 @@ stages:
 
 test-job:
   stage: test
+  image: maven:3.9.6-eclipse-temurin-17
   tags:
     - local
-  before_script:
-    - chmod +x mvnw
-    - apt-get update && apt-get install -y curl postgresql-client
-    - curl -sSL https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh -o wait-for-it.sh
-    - chmod +x wait-for-it.sh
-    - ./wait-for-it.sh postgres-db:5432 -t 60 -- echo "postgres-db is up"
-    - export PGPASSWORD="$POSTGRES_PASSWORD"
-    - |
-      for DB in "$AUTH_DB" "$USER_DB"; do
-        echo "Ensuring database '$DB' exists..."
-        psql -h postgres-db -U "$POSTGRES_USER" -tc "SELECT 1 FROM pg_database WHERE datname = '$DB'" | grep -q 1 || \
-        psql -h postgres-db -U "$POSTGRES_USER" -c "CREATE DATABASE \"$DB\""
-      done
+  services:
+    - name: docker:24-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+    TESTCONTAINERS_HOST_OVERRIDE: docker
   script:
+    - chmod +x mvnw
     - ./mvnw test -pl auth-service -am
     - ./mvnw test -pl user-service -am
   artifacts:
@@ -80,13 +70,23 @@ deploy-job:
   only:
     - main
   script:
-    - 'JAR_FILE=$(ls auth-service/target/*.jar | head -n 1)'
-    - 'echo "Using jar: $JAR_FILE"'
-    - 'docker rm -f "$APP_NAME" || true'
+    - 'AUTH_JAR=$(ls auth-service/target/*.jar | head -n 1)'
+    - 'USER_JAR=$(ls user-service/target/*.jar | head -n 1)'
+    - 'echo "Using auth jar: $AUTH_JAR"'
+    - 'echo "Using user jar: $USER_JAR"'
+    - 'docker rm -f "$AUTH_APP_NAME" || true'
+    - 'docker rm -f "$USER_APP_NAME" || true'
     - |
       docker run -d \
-        --name "$APP_NAME" \
+        --name "$AUTH_APP_NAME" \
         -p 8080:8080 \
-        -v "$CI_PROJECT_DIR/$JAR_FILE:/app.jar" \
+        -v "$CI_PROJECT_DIR/$AUTH_JAR:/app.jar" \
+        mcr.microsoft.com/openjdk/jdk:17-ubuntu \
+        java -jar /app.jar
+    - |
+      docker run -d \
+        --name "$USER_APP_NAME" \
+        -p 8081:8080 \
+        -v "$CI_PROJECT_DIR/$USER_JAR:/app.jar" \
         mcr.microsoft.com/openjdk/jdk:17-ubuntu \
         java -jar /app.jar
