@@ -122,43 +122,43 @@ integration-test-user:
         - user-service/target/surefire-reports/*.xml
         - user-service/target/failsafe-reports/*.xml
 
-# ================= BUILD JAR =================
-
-build-auth:
-  stage: build
-  tags:
-    - local
-#  rules:
-#    - changes:
-#        - pom.xml
-#        - core/**
-#        - auth-service/**
-  script:
-    - chmod +x mvnw
-    - ./mvnw -T 1C clean package -DskipTests -pl auth-service -am
-  artifacts:
-    paths:
-      - core/target/*.jar
-      - auth-service/target/*.jar
-    expire_in: 1 hour
-
-build-user:
-  stage: build
-  tags:
-    - local
-#  rules:
-#    - changes:
-#        - pom.xml
-#        - core/**
-#        - user-service/**
-  script:
-    - chmod +x mvnw
-    - ./mvnw -T 1C clean package -DskipTests -pl user-service -am
-  artifacts:
-    paths:
-      - core/target/*.jar
-      - user-service/target/*.jar
-    expire_in: 1 hour
+## ================= BUILD JAR =================
+#
+#build-auth:
+#  stage: build
+#  tags:
+#    - local
+##  rules:
+##    - changes:
+##        - pom.xml
+##        - core/**
+##        - auth-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw -T 1C clean package -DskipTests -pl auth-service -am
+#  artifacts:
+#    paths:
+#      - core/target/*.jar
+#      - auth-service/target/*.jar
+#    expire_in: 1 hour
+#
+#build-user:
+#  stage: build
+#  tags:
+#    - local
+##  rules:
+##    - changes:
+##        - pom.xml
+##        - core/**
+##        - user-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw -T 1C clean package -DskipTests -pl user-service -am
+#  artifacts:
+#    paths:
+#      - core/target/*.jar
+#      - user-service/target/*.jar
+#    expire_in: 1 hour
 
 # ================= DOCKER BUILD & PUSH =================
 # Dockerfile của bạn là multi-module nên build context phải là "."
