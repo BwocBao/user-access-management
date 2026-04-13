@@ -87,7 +87,7 @@ integration-test-auth:
 #        - auth-service/**
   script:
     - chmod +x mvnw
-    - ./mvnw verify -pl auth-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false
+    - ./mvnw verify -pl auth-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true
   artifacts:
     when: always
     reports:
@@ -114,7 +114,7 @@ integration-test-user:
 #        - user-service/**
   script:
     - chmod +x mvnw
-    - ./mvnw verify -pl user-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false
+    - ./mvnw verify -pl user-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true
   artifacts:
     when: always
     reports:
