@@ -31,11 +31,11 @@ unit-test-auth:
   stage: test
   tags:
     - local
-  rules:
-    - changes:
-        - pom.xml
-        - core/**
-        - auth-service/**
+#  rules:
+#    - changes:
+#        - pom.xml
+#        - core/**
+#        - auth-service/**
   script:
     - chmod +x mvnw
     - ./mvnw test -pl auth-service -am -T 1C -Dtest='*Test'
@@ -49,11 +49,11 @@ unit-test-user:
   stage: test
   tags:
     - local
-  rules:
-    - changes:
-        - pom.xml
-        - core/**
-        - user-service/**
+#  rules:
+#    - changes:
+#        - pom.xml
+#        - core/**
+#        - user-service/**
   script:
     - chmod +x mvnw
     - ./mvnw test -pl user-service -am -T 1C -Dtest='*Test'
@@ -81,10 +81,10 @@ integration-test-auth:
     TESTCONTAINERS_REUSE_ENABLE: "true"
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4"'
-      changes:
-        - pom.xml
-        - core/**
-        - auth-service/**
+#      changes:
+#        - pom.xml
+#        - core/**
+#        - auth-service/**
   script:
     - chmod +x mvnw
     - ./mvnw verify -pl auth-service -am -T 1C -Dtest='*IT'
@@ -108,10 +108,10 @@ integration-test-user:
     TESTCONTAINERS_REUSE_ENABLE: "true"
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4"'
-      changes:
-        - pom.xml
-        - core/**
-        - user-service/**
+#      changes:
+#        - pom.xml
+#        - core/**
+#        - user-service/**
   script:
     - chmod +x mvnw
     - ./mvnw verify -pl user-service -am -T 1C -Dtest='*IT'
@@ -128,11 +128,11 @@ build-auth:
   stage: build
   tags:
     - local
-  rules:
-    - changes:
-        - pom.xml
-        - core/**
-        - auth-service/**
+#  rules:
+#    - changes:
+#        - pom.xml
+#        - core/**
+#        - auth-service/**
   script:
     - chmod +x mvnw
     - ./mvnw -T 1C clean package -DskipTests -pl auth-service -am
@@ -146,11 +146,11 @@ build-user:
   stage: build
   tags:
     - local
-  rules:
-    - changes:
-        - pom.xml
-        - core/**
-        - user-service/**
+#  rules:
+#    - changes:
+#        - pom.xml
+#        - core/**
+#        - user-service/**
   script:
     - chmod +x mvnw
     - ./mvnw -T 1C clean package -DskipTests -pl user-service -am
@@ -176,11 +176,11 @@ docker-auth:
     - build-auth
   variables:
     DOCKER_HOST: tcp://docker:2375
-  rules:
-    - changes:
-        - pom.xml
-        - core/**
-        - auth-service/**
+#  rules:
+#    - changes:
+#        - pom.xml
+#        - core/**
+#        - auth-service/**
   script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker build -t "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA" -f auth-service/Dockerfile .
@@ -198,11 +198,11 @@ docker-user:
     - build-user
   variables:
     DOCKER_HOST: tcp://docker:2375
-  rules:
-    - changes:
-        - pom.xml
-        - core/**
-        - user-service/**
+#  rules:
+#    - changes:
+#        - pom.xml
+#        - core/**
+#        - user-service/**
   script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker build -t "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA" -f user-service/Dockerfile .
