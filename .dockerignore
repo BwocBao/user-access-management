@@ -1,4 +1,12 @@
-**/target/
 **/*.iml
 .idea
 .DS_Store
+
+# ignore toàn bộ target
+**/target/
+
+# nhưng cho phép 2 service jar đi qua
+!auth-service/target/
+!auth-service/target/*.jar
+!user-service/target/
+!user-service/target/*.jar
