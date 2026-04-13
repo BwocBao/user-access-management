@@ -1,3 +1,210 @@
+##Cách 1: Docker build rồi push luôn không cần stage build
+## ================= GLOBAL IMAGE =================
+#image: maven:3.9.6-eclipse-temurin-17
+#
+## ================= GLOBAL VARIABLES =================
+#variables:
+#  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+#  SPRING_PROFILES_ACTIVE: ci
+#
+#  AUTH_APP_NAME: auth-service
+#  USER_APP_NAME: user-service
+#
+#  DOCKER_TLS_CERTDIR: ""
+#  DOCKER_DRIVER: overlay2
+#
+## ================= CACHE =================
+#cache:
+#  key: maven-cache
+#  paths:
+#    - .m2/repository
+#
+## ================= STAGES =================
+#stages:
+#  - test
+#  - docker
+#  - deploy
+#
+## ================= UNIT TEST =================
+#
+#unit-test-auth:
+#  stage: test
+#  tags:
+#    - local
+#  #  rules:
+#  #    - changes:
+#  #        - pom.xml
+#  #        - core/**
+#  #        - auth-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw test -pl auth-service -am -T 1C -Dtest='*Test'
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - auth-service/target/surefire-reports/*.xml
+#
+#unit-test-user:
+#  stage: test
+#  tags:
+#    - local
+#  #  rules:
+#  #    - changes:
+#  #        - pom.xml
+#  #        - core/**
+#  #        - user-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw test -pl user-service -am -T 1C -Dtest='*Test'
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - user-service/target/surefire-reports/*.xml
+#
+## ================= INTEGRATION TEST =================
+## Lưu ý:
+## Runner Docker executor phải bật privileged = true
+## thì Testcontainers mới chạy ổn với docker:dind
+#
+#integration-test-auth:
+#  stage: test
+#  tags:
+#    - local
+#  services:
+#    - name: docker:24-dind
+#      alias: docker
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#    TESTCONTAINERS_HOST_OVERRIDE: docker
+#    TESTCONTAINERS_REUSE_ENABLE: "true"
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4"'
+#  #      changes:
+#  #        - pom.xml
+#  #        - core/**
+#  #        - auth-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw verify -pl auth-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - auth-service/target/surefire-reports/*.xml
+#        - auth-service/target/failsafe-reports/*.xml
+#
+#integration-test-user:
+#  stage: test
+#  tags:
+#    - local
+#  services:
+#    - name: docker:24-dind
+#      alias: docker
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#    TESTCONTAINERS_HOST_OVERRIDE: docker
+#    TESTCONTAINERS_REUSE_ENABLE: "true"
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4"'
+#  #      changes:
+#  #        - pom.xml
+#  #        - core/**
+#  #        - user-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw verify -pl user-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - user-service/target/surefire-reports/*.xml
+#        - user-service/target/failsafe-reports/*.xml
+#
+## ================= DOCKER BUILD & PUSH =================
+## Dockerfile của bạn là multi-module nên build context phải là "."
+## và chỉ định Dockerfile bằng -f auth-service/Dockerfile / user-service/Dockerfile
+#
+#docker-auth:
+#  stage: docker
+#  image: docker:24
+#  services:
+#    - name: docker:24-dind
+#      alias: docker
+#  tags:
+#    - local
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#  #  rules:
+#  #    - changes:
+#  #        - pom.xml
+#  #        - core/**
+#  #        - auth-service/**
+#  script:
+#    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+#    - docker build -t "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA" -f auth-service/Dockerfile .
+#    - docker push "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
+#
+#docker-user:
+#  stage: docker
+#  image: docker:24
+#  services:
+#    - name: docker:24-dind
+#      alias: docker
+#  tags:
+#    - local
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#  #  rules:
+#  #    - changes:
+#  #        - pom.xml
+#  #        - core/**
+#  #        - user-service/**
+#  script:
+#    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+#    - docker build -t "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA" -f user-service/Dockerfile .
+#    - docker push "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
+#
+## ================= DEPLOY =================
+## Đây vẫn là deploy kiểu demo bằng docker:dind trong CI
+## job xong thì môi trường này có thể không sống bền như deploy server thật
+#
+#deploy:
+#  stage: deploy
+#  image: docker:24
+#  services:
+#    - name: docker:24-dind
+#      alias: docker
+#  tags:
+#    - local
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#  only:
+#    - review/r4
+#  script:
+#    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+#    - docker pull "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
+#    - docker pull "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
+#    - docker rm -f "$AUTH_APP_NAME" || true
+#    - docker rm -f "$USER_APP_NAME" || true
+#    - |
+#      docker run -d \
+#        --name "$AUTH_APP_NAME" \
+#        -p 8080:8080 \
+#        "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
+#    - |
+#      docker run -d \
+#        --name "$USER_APP_NAME" \
+#        -p 8081:8080 \
+#        "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
+
+
+
+
+
+
+#Cách 2: Docker copy image từ stage build rồi push lên
 # ================= GLOBAL IMAGE =================
 image: maven:3.9.6-eclipse-temurin-17
 
@@ -122,43 +329,43 @@ integration-test-user:
         - user-service/target/surefire-reports/*.xml
         - user-service/target/failsafe-reports/*.xml
 
-## ================= BUILD JAR =================
-#
-#build-auth:
-#  stage: build
-#  tags:
-#    - local
-##  rules:
-##    - changes:
-##        - pom.xml
-##        - core/**
-##        - auth-service/**
-#  script:
-#    - chmod +x mvnw
-#    - ./mvnw -T 1C clean package -DskipTests -pl auth-service -am
-#  artifacts:
-#    paths:
-#      - core/target/*.jar
-#      - auth-service/target/*.jar
-#    expire_in: 1 hour
-#
-#build-user:
-#  stage: build
-#  tags:
-#    - local
-##  rules:
-##    - changes:
-##        - pom.xml
-##        - core/**
-##        - user-service/**
-#  script:
-#    - chmod +x mvnw
-#    - ./mvnw -T 1C clean package -DskipTests -pl user-service -am
-#  artifacts:
-#    paths:
-#      - core/target/*.jar
-#      - user-service/target/*.jar
-#    expire_in: 1 hour
+# ================= BUILD JAR =================
+
+build-auth:
+  stage: build
+  tags:
+    - local
+#  rules:
+#    - changes:
+#        - pom.xml
+#        - core/**
+#        - auth-service/**
+  script:
+    - chmod +x mvnw
+    - ./mvnw -T 1C clean package -DskipTests -pl auth-service -am
+  artifacts:
+    paths:
+      - core/target/*.jar
+      - auth-service/target/*.jar
+    expire_in: 1 hour
+
+build-user:
+  stage: build
+  tags:
+    - local
+#  rules:
+#    - changes:
+#        - pom.xml
+#        - core/**
+#        - user-service/**
+  script:
+    - chmod +x mvnw
+    - ./mvnw -T 1C clean package -DskipTests -pl user-service -am
+  artifacts:
+    paths:
+      - core/target/*.jar
+      - user-service/target/*.jar
+    expire_in: 1 hour
 
 # ================= DOCKER BUILD & PUSH =================
 # Dockerfile của bạn là multi-module nên build context phải là "."
@@ -172,8 +379,8 @@ docker-auth:
       alias: docker
   tags:
     - local
-#  dependencies:
-#    - build-auth
+  dependencies:
+    - build-auth
   variables:
     DOCKER_HOST: tcp://docker:2375
 #  rules:
@@ -194,8 +401,8 @@ docker-user:
       alias: docker
   tags:
     - local
-#  dependencies:
-#    - build-user
+  dependencies:
+    - build-user
   variables:
     DOCKER_HOST: tcp://docker:2375
 #  rules:
@@ -240,6 +447,18 @@ deploy:
         --name "$USER_APP_NAME" \
         -p 8081:8080 \
         "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## image:
 ## Đây là image Docker mặc định cho toàn bộ pipeline.
