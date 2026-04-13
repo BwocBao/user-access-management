@@ -172,8 +172,8 @@ docker-auth:
       alias: docker
   tags:
     - local
-  dependencies:
-    - build-auth
+#  dependencies:
+#    - build-auth
   variables:
     DOCKER_HOST: tcp://docker:2375
 #  rules:
@@ -194,8 +194,8 @@ docker-user:
       alias: docker
   tags:
     - local
-  dependencies:
-    - build-user
+#  dependencies:
+#    - build-user
   variables:
     DOCKER_HOST: tcp://docker:2375
 #  rules:

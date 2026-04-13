@@ -1,3 +1,4 @@
+#Docker tự build
 # Stage 1: build
 #Pull image maven và jdk 17 về và Đặt tên stage là builder
 FROM maven:3.9.6-eclipse-temurin-17-alpine as builder
@@ -45,9 +46,22 @@ ENTRYPOINT ["java","-jar","user-service.jar"]
 
 
 
-
-
-
+#Docker chỉ copy jar đc build sẵn từ CI
+#FROM eclipse-temurin:17-jre-alpine
+#
+#RUN addgroup -S usergroup && adduser -S userapp -G usergroup
+#
+#WORKDIR /app
+#
+## Lấy jar đã được build sẵn từ CI
+#COPY user-service/target/*.jar user-service.jar
+#
+#RUN chown -R userapp:usergroup /app
+#USER userapp
+#
+#EXPOSE 8082
+#
+#ENTRYPOINT ["java", "-jar", "user-service.jar"]
 
 
 #Cách 2:

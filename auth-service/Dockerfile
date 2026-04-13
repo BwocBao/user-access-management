@@ -1,3 +1,4 @@
+#Docker tự build image
 # Stage 1: build
 #Pull image maven và jdk 17 về và Đặt tên stage là builder
 FROM maven:3.9.6-eclipse-temurin-17-alpine as builder
@@ -41,8 +42,22 @@ EXPOSE 8081
 #lệnh chạy app
 ENTRYPOINT ["java","-jar","auth-service.jar"]
 
-
-
+#Docker copy jar được build sẵn từ CI
+#FROM eclipse-temurin:17-jre-alpine
+#
+#RUN addgroup -S authgroup && adduser -S authuser -G authgroup
+#
+#WORKDIR /app
+#
+## Lấy jar đã được build sẵn từ CI
+#COPY auth-service/target/*.jar auth-service.jar
+#
+#RUN chown -R authuser:authgroup /app
+#USER authuser
+#
+#EXPOSE 8081
+#
+#ENTRYPOINT ["java", "-jar", "auth-service.jar"]
 
 
 
