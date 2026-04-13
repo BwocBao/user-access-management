@@ -14,12 +14,7 @@ variables:
 
 # ================= CACHE =================
 cache:
-  key:
-    files:
-      - pom.xml
-      - core/pom.xml
-      - auth-service/pom.xml
-      - user-service/pom.xml
+  key: maven-cache
   paths:
     - .m2/repository
 
