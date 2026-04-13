@@ -1,310 +1,250 @@
 # ================= GLOBAL IMAGE =================
-# Image mặc định cho toàn bộ pipeline
-# Nếu job không khai báo image riêng → dùng image này
 image: maven:3.9.6-eclipse-temurin-17
-
 
 # ================= GLOBAL VARIABLES =================
 variables:
-  # Maven sẽ lưu dependency vào .m2 trong project
-  # → GitLab cache được → không phải download lại mỗi lần
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-
-  # profile Spring Boot khi chạy CI
   SPRING_PROFILES_ACTIVE: ci
 
-  # tên container khi deploy
   AUTH_APP_NAME: auth-service
   USER_APP_NAME: user-service
 
-  # config cho Docker in Docker
   DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
 
-
 # ================= CACHE =================
 cache:
-  # key dựa trên pom.xml
-  # → chỉ invalidate cache khi dependency thay đổi
   key:
     files:
       - pom.xml
-
-  # cache thư viện Maven
+      - core/pom.xml
+      - auth-service/pom.xml
+      - user-service/pom.xml
   paths:
     - .m2/repository
 
-
 # ================= STAGES =================
-# pipeline sẽ chạy theo thứ tự này
 stages:
   - test
   - build
   - docker
   - deploy
 
-
-## ================= LINT =================
-#lint:
-#  stage: lint
-#  tags: [local]
-#
-#  script:
-#    # cấp quyền chạy mvnw
-#    - chmod +x mvnw
-#
-#    # check coding convention (checkstyle)
-#    - ./mvnw checkstyle:check
-
-
 # ================= UNIT TEST =================
 
-# ---------- AUTH SERVICE ----------
 unit-test-auth:
   stage: test
-  tags: [local]
-
-  # chỉ chạy nếu auth-service thay đổi
+  tags:
+    - local
   rules:
     - changes:
+        - pom.xml
+        - core/**
         - auth-service/**
-
   script:
     - chmod +x mvnw
-
-    # -T 1C: chạy song song theo số core CPU
-    # -Dtest='*Test': chỉ chạy unit test
-    - ./mvnw test -pl auth-service -T 1C -Dtest='*Test'
-
+    - ./mvnw test -pl auth-service -am -T 1C -Dtest='*Test'
   artifacts:
-    # luôn upload report kể cả fail
     when: always
     reports:
       junit:
         - auth-service/target/surefire-reports/*.xml
 
-
-# ---------- USER SERVICE ----------
 unit-test-user:
   stage: test
-  tags: [local]
-
+  tags:
+    - local
   rules:
     - changes:
+        - pom.xml
+        - core/**
         - user-service/**
-
   script:
     - chmod +x mvnw
-    - ./mvnw test -pl user-service -T 1C -Dtest='*Test'
-
+    - ./mvnw test -pl user-service -am -T 1C -Dtest='*Test'
   artifacts:
     when: always
     reports:
       junit:
         - user-service/target/surefire-reports/*.xml
 
-
 # ================= INTEGRATION TEST =================
-# test có dùng Testcontainers (DB, RabbitMQ)
+# Lưu ý:
+# Runner Docker executor phải bật privileged = true
+# thì Testcontainers mới chạy ổn với docker:dind
 
 integration-test-auth:
   stage: test
-  tags: [local]
-
-  # bật docker daemon cho testcontainers
+  tags:
+    - local
   services:
     - name: docker:24-dind
       alias: docker
-
   variables:
-    # kết nối tới docker daemon
     DOCKER_HOST: tcp://docker:2375
-
-    # giúp testcontainers biết host docker
     TESTCONTAINERS_HOST_OVERRIDE: docker
-
-    # cho phép reuse container → tăng tốc
     TESTCONTAINERS_REUSE_ENABLE: "true"
-
-  # chỉ chạy integration test trên main (đỡ chậm)
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4"'
-
+      changes:
+        - pom.xml
+        - core/**
+        - auth-service/**
   script:
     - chmod +x mvnw
-
-    # verify: chạy cả integration test phase
-    # *IT: naming convention cho integration test
-    - ./mvnw verify -pl auth-service -T 1C -Dtest='*IT'
-
+    - ./mvnw verify -pl auth-service -am -T 1C -Dtest='*IT'
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - auth-service/target/surefire-reports/*.xml
+        - auth-service/target/failsafe-reports/*.xml
 
 integration-test-user:
   stage: test
-  tags: [local]
-
+  tags:
+    - local
   services:
     - name: docker:24-dind
       alias: docker
-
   variables:
     DOCKER_HOST: tcp://docker:2375
     TESTCONTAINERS_HOST_OVERRIDE: docker
     TESTCONTAINERS_REUSE_ENABLE: "true"
-
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4"'
-
+      changes:
+        - pom.xml
+        - core/**
+        - user-service/**
   script:
     - chmod +x mvnw
-    - ./mvnw verify -pl user-service -T 1C -Dtest='*IT'
+    - ./mvnw verify -pl user-service -am -T 1C -Dtest='*IT'
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - user-service/target/surefire-reports/*.xml
+        - user-service/target/failsafe-reports/*.xml
 
-
-# ================= BUILD =================
-# build jar file cho từng service
+# ================= BUILD JAR =================
 
 build-auth:
   stage: build
-  tags: [local]
-
-  # chỉ build nếu auth thay đổi
+  tags:
+    - local
   rules:
     - changes:
+        - pom.xml
+        - core/**
         - auth-service/**
-
   script:
     - chmod +x mvnw
-
-    # clean: xóa build cũ
-    # package: build jar
-    # -DskipTests: bỏ test (đã test ở stage trước)
-    - ./mvnw -T 1C clean package -DskipTests -pl auth-service
-
+    - ./mvnw -T 1C clean package -DskipTests -pl auth-service -am
   artifacts:
-    # lưu jar để job sau dùng
     paths:
+      - core/target/*.jar
       - auth-service/target/*.jar
-
-    # chỉ giữ 1 giờ
     expire_in: 1 hour
-
 
 build-user:
   stage: build
-  tags: [local]
-
+  tags:
+    - local
   rules:
     - changes:
+        - pom.xml
+        - core/**
         - user-service/**
-
   script:
     - chmod +x mvnw
-    - ./mvnw -T 1C clean package -DskipTests -pl user-service
-
+    - ./mvnw -T 1C clean package -DskipTests -pl user-service -am
   artifacts:
     paths:
+      - core/target/*.jar
       - user-service/target/*.jar
     expire_in: 1 hour
 
-
 # ================= DOCKER BUILD & PUSH =================
+# Dockerfile của bạn là multi-module nên build context phải là "."
+# và chỉ định Dockerfile bằng -f auth-service/Dockerfile / user-service/Dockerfile
 
 docker-auth:
   stage: docker
-
-  # dùng docker CLI thay vì maven
   image: docker:24
-
   services:
     - name: docker:24-dind
       alias: docker
-
-  tags: [local]
-
-  # lấy artifact từ build-auth
+  tags:
+    - local
   dependencies:
     - build-auth
-
   variables:
     DOCKER_HOST: tcp://docker:2375
-
   rules:
     - changes:
+        - pom.xml
+        - core/**
         - auth-service/**
-
   script:
-    # build image từ Dockerfile trong auth-service
-    - docker build -t $CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA auth-service
-
-    # push lên GitLab Container Registry
-    - docker push $CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA
-
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA" -f auth-service/Dockerfile .
+    - docker push "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
 
 docker-user:
   stage: docker
   image: docker:24
-
   services:
     - name: docker:24-dind
       alias: docker
-
-  tags: [local]
-
+  tags:
+    - local
   dependencies:
     - build-user
-
   variables:
     DOCKER_HOST: tcp://docker:2375
-
   rules:
     - changes:
+        - pom.xml
+        - core/**
         - user-service/**
-
   script:
-    - docker build -t $CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA user-service
-    - docker push $CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA
-
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA" -f user-service/Dockerfile .
+    - docker push "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
 
 # ================= DEPLOY =================
+# Đây vẫn là deploy kiểu demo bằng docker:dind trong CI
+# job xong thì môi trường này có thể không sống bền như deploy server thật
+
 deploy:
   stage: deploy
-
   image: docker:24
-
   services:
     - name: docker:24-dind
       alias: docker
-
-  tags: [local]
-
+  tags:
+    - local
   variables:
     DOCKER_HOST: tcp://docker:2375
-
-  # chỉ deploy từ branch main
   only:
     - review/r4
-
   script:
-    # pull image mới nhất
-    - docker pull $CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA
-    - docker pull $CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA
-
-    # xóa container cũ (nếu có)
-    - docker rm -f $AUTH_APP_NAME || true
-    - docker rm -f $USER_APP_NAME || true
-
-    # chạy auth-service
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker pull "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
+    - docker pull "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
+    - docker rm -f "$AUTH_APP_NAME" || true
+    - docker rm -f "$USER_APP_NAME" || true
     - |
       docker run -d \
-        --name $AUTH_APP_NAME \
+        --name "$AUTH_APP_NAME" \
         -p 8080:8080 \
-        $CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA
-
-    # chạy user-service
+        "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
     - |
       docker run -d \
-        --name $USER_APP_NAME \
+        --name "$USER_APP_NAME" \
         -p 8081:8080 \
-        $CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA
+        "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
 
 ## image:
 ## Đây là image Docker mặc định cho toàn bộ pipeline.
