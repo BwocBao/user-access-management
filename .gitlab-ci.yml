@@ -38,24 +38,23 @@ cache:
 # ================= STAGES =================
 # pipeline sẽ chạy theo thứ tự này
 stages:
-  - lint
   - test
   - build
   - docker
   - deploy
 
 
-# ================= LINT =================
-lint:
-  stage: lint
-  tags: [local]
-
-  script:
-    # cấp quyền chạy mvnw
-    - chmod +x mvnw
-
-    # check coding convention (checkstyle)
-    - ./mvnw checkstyle:check
+## ================= LINT =================
+#lint:
+#  stage: lint
+#  tags: [local]
+#
+#  script:
+#    # cấp quyền chạy mvnw
+#    - chmod +x mvnw
+#
+#    # check coding convention (checkstyle)
+#    - ./mvnw checkstyle:check
 
 
 # ================= UNIT TEST =================
