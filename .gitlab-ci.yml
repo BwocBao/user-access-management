@@ -1,93 +1,579 @@
+# ================= GLOBAL IMAGE =================
+# Image mặc định cho toàn bộ pipeline
+# Nếu job không khai báo image riêng → dùng image này
 image: maven:3.9.6-eclipse-temurin-17
 
+
+# ================= GLOBAL VARIABLES =================
 variables:
+  # Maven sẽ lưu dependency vào .m2 trong project
+  # → GitLab cache được → không phải download lại mỗi lần
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+
+  # profile Spring Boot khi chạy CI
   SPRING_PROFILES_ACTIVE: ci
+
+  # tên container khi deploy
   AUTH_APP_NAME: auth-service
   USER_APP_NAME: user-service
 
+  # config cho Docker in Docker
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
+
+
+# ================= CACHE =================
 cache:
-  key: maven-cache
+  # key dựa trên pom.xml
+  # → chỉ invalidate cache khi dependency thay đổi
+  key:
+    files:
+      - pom.xml
+
+  # cache thư viện Maven
   paths:
     - .m2/repository
 
+
+# ================= STAGES =================
+# pipeline sẽ chạy theo thứ tự này
 stages:
+  - lint
   - test
   - build
+  - docker
   - deploy
 
-test-job:
+
+# ================= LINT =================
+lint:
+  stage: lint
+  tags: [local]
+
+  script:
+    # cấp quyền chạy mvnw
+    - chmod +x mvnw
+
+    # check coding convention (checkstyle)
+    - ./mvnw checkstyle:check
+
+
+# ================= UNIT TEST =================
+
+# ---------- AUTH SERVICE ----------
+unit-test-auth:
   stage: test
-  image: maven:3.9.6-eclipse-temurin-17
-  tags:
-    - local
-  services:
-    - name: docker:24-dind
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-    DOCKER_DRIVER: overlay2
-    TESTCONTAINERS_HOST_OVERRIDE: docker
+  tags: [local]
+
+  # chỉ chạy nếu auth-service thay đổi
+  rules:
+    - changes:
+        - auth-service/**
+
   script:
     - chmod +x mvnw
-    - ./mvnw test -pl auth-service -am
-    - ./mvnw test -pl user-service -am
+
+    # -T 1C: chạy song song theo số core CPU
+    # -Dtest='*Test': chỉ chạy unit test
+    - ./mvnw test -pl auth-service -T 1C -Dtest='*Test'
+
   artifacts:
+    # luôn upload report kể cả fail
     when: always
     reports:
       junit:
         - auth-service/target/surefire-reports/*.xml
-        - user-service/target/surefire-reports/*.xml
 
-build-job:
-  stage: build
-  tags:
-    - local
+
+# ---------- USER SERVICE ----------
+unit-test-user:
+  stage: test
+  tags: [local]
+
+  rules:
+    - changes:
+        - user-service/**
+
   script:
     - chmod +x mvnw
-    - ./mvnw clean package -DskipTests
-  artifacts:
-    paths:
-      - core/target/*.jar
-      - auth-service/target/*.jar
-      - user-service/target/*.jar
-    expire_in: 1 hour
+    - ./mvnw test -pl user-service -T 1C -Dtest='*Test'
 
-deploy-job:
-  stage: deploy
-  image: docker:24
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - user-service/target/surefire-reports/*.xml
+
+
+# ================= INTEGRATION TEST =================
+# test có dùng Testcontainers (DB, RabbitMQ)
+
+integration-test-auth:
+  stage: test
+  tags: [local]
+
+  # bật docker daemon cho testcontainers
   services:
     - name: docker:24-dind
       alias: docker
-  tags:
-    - local
+
+  variables:
+    # kết nối tới docker daemon
+    DOCKER_HOST: tcp://docker:2375
+
+    # giúp testcontainers biết host docker
+    TESTCONTAINERS_HOST_OVERRIDE: docker
+
+    # cho phép reuse container → tăng tốc
+    TESTCONTAINERS_REUSE_ENABLE: "true"
+
+  # chỉ chạy integration test trên main (đỡ chậm)
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "review/r4"'
+
+  script:
+    - chmod +x mvnw
+
+    # verify: chạy cả integration test phase
+    # *IT: naming convention cho integration test
+    - ./mvnw verify -pl auth-service -T 1C -Dtest='*IT'
+
+
+integration-test-user:
+  stage: test
+  tags: [local]
+
+  services:
+    - name: docker:24-dind
+      alias: docker
+
   variables:
     DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  dependencies:
-    - build-job
-  only:
-    - main
-    - review/r4
+    TESTCONTAINERS_HOST_OVERRIDE: docker
+    TESTCONTAINERS_REUSE_ENABLE: "true"
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "review/r4"'
+
   script:
-    - 'AUTH_JAR=$(ls auth-service/target/*.jar | head -n 1)'
-    - 'USER_JAR=$(ls user-service/target/*.jar | head -n 1)'
-    - 'echo "Using auth jar: $AUTH_JAR"'
-    - 'echo "Using user jar: $USER_JAR"'
-    - 'docker rm -f "$AUTH_APP_NAME" || true'
-    - 'docker rm -f "$USER_APP_NAME" || true'
+    - chmod +x mvnw
+    - ./mvnw verify -pl user-service -T 1C -Dtest='*IT'
+
+
+# ================= BUILD =================
+# build jar file cho từng service
+
+build-auth:
+  stage: build
+  tags: [local]
+
+  # chỉ build nếu auth thay đổi
+  rules:
+    - changes:
+        - auth-service/**
+
+  script:
+    - chmod +x mvnw
+
+    # clean: xóa build cũ
+    # package: build jar
+    # -DskipTests: bỏ test (đã test ở stage trước)
+    - ./mvnw -T 1C clean package -DskipTests -pl auth-service
+
+  artifacts:
+    # lưu jar để job sau dùng
+    paths:
+      - auth-service/target/*.jar
+
+    # chỉ giữ 1 giờ
+    expire_in: 1 hour
+
+
+build-user:
+  stage: build
+  tags: [local]
+
+  rules:
+    - changes:
+        - user-service/**
+
+  script:
+    - chmod +x mvnw
+    - ./mvnw -T 1C clean package -DskipTests -pl user-service
+
+  artifacts:
+    paths:
+      - user-service/target/*.jar
+    expire_in: 1 hour
+
+
+# ================= DOCKER BUILD & PUSH =================
+
+docker-auth:
+  stage: docker
+
+  # dùng docker CLI thay vì maven
+  image: docker:24
+
+  services:
+    - name: docker:24-dind
+      alias: docker
+
+  tags: [local]
+
+  # lấy artifact từ build-auth
+  dependencies:
+    - build-auth
+
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+
+  rules:
+    - changes:
+        - auth-service/**
+
+  script:
+    # build image từ Dockerfile trong auth-service
+    - docker build -t $CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA auth-service
+
+    # push lên GitLab Container Registry
+    - docker push $CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA
+
+
+docker-user:
+  stage: docker
+  image: docker:24
+
+  services:
+    - name: docker:24-dind
+      alias: docker
+
+  tags: [local]
+
+  dependencies:
+    - build-user
+
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+
+  rules:
+    - changes:
+        - user-service/**
+
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA user-service
+    - docker push $CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA
+
+
+# ================= DEPLOY =================
+deploy:
+  stage: deploy
+
+  image: docker:24
+
+  services:
+    - name: docker:24-dind
+      alias: docker
+
+  tags: [local]
+
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+
+  # chỉ deploy từ branch main
+  only:
+    - review/r4
+
+  script:
+    # pull image mới nhất
+    - docker pull $CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA
+    - docker pull $CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA
+
+    # xóa container cũ (nếu có)
+    - docker rm -f $AUTH_APP_NAME || true
+    - docker rm -f $USER_APP_NAME || true
+
+    # chạy auth-service
     - |
       docker run -d \
-        --name "$AUTH_APP_NAME" \
+        --name $AUTH_APP_NAME \
         -p 8080:8080 \
-        -v "$CI_PROJECT_DIR/$AUTH_JAR:/app.jar" \
-        mcr.microsoft.com/openjdk/jdk:17-ubuntu \
-        java -jar /app.jar
+        $CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA
+
+    # chạy user-service
     - |
       docker run -d \
-        --name "$USER_APP_NAME" \
+        --name $USER_APP_NAME \
         -p 8081:8080 \
-        -v "$CI_PROJECT_DIR/$USER_JAR:/app.jar" \
-        mcr.microsoft.com/openjdk/jdk:17-ubuntu \
-        java -jar /app.jar
+        $CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA
+
+## image:
+## Đây là image Docker mặc định cho toàn bộ pipeline.
+## Nếu job nào không khai báo image riêng thì sẽ dùng image này.
+#image: maven:3.9.6-eclipse-temurin-17
+#
+#
+## variables:
+## Khai báo biến môi trường dùng chung cho toàn pipeline.
+## Các job bên dưới đều có thể đọc được các biến này,
+## trừ khi job đó override bằng variables riêng của nó.
+#variables:
+#  # MAVEN_OPTS:
+#  # Truyền option mặc định cho Maven.
+#  # -Dmaven.repo.local=.m2/repository
+#  # nghĩa là bảo Maven lưu dependency vào thư mục .m2/repository
+#  # ngay trong workspace project, thay vì ~/.m2 mặc định.
+#  # Mục đích:
+#  # - để GitLab cache được thư mục này
+#  # - job sau không phải tải dependency lại từ đầu
+#  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+#
+#  SPRING_PROFILES_ACTIVE: ci
+#
+#  AUTH_APP_NAME: auth-service
+#
+#  USER_APP_NAME: user-service
+#
+#
+## cache:
+## Cache dùng để tăng tốc pipeline.
+## Khác với artifact:
+## - cache: lưu các thứ tái sử dụng nhiều lần, ví dụ Maven dependencies
+## - artifact: output cụ thể của 1 job để truyền sang job khác
+#cache:
+#  # key:
+#  # tên định danh của cache.
+#  # Các pipeline cùng key có thể dùng lại cache này.
+#  key: maven-cache
+#
+#  # paths:
+#  # danh sách thư mục/file được cache
+#  paths:
+#    - .m2/repository
+#
+#
+#
+## Nếu stage trước fail thì stage sau không chạy.
+#stages:
+#  - test
+#  - build
+#  - deploy
+#
+#
+## ================= TEST =================
+#test-job:
+#  # Job này thuộc stage test
+#  stage: test
+#
+#  # image riêng cho job này.
+#  # Nếu không khai báo thì nó vẫn dùng image ở đầu file.
+#  # Ở đây ghi lại cũng không sao, giúp đọc dễ hơn.
+#  image: maven:3.9.6-eclipse-temurin-17
+#
+#
+#  # GitLab dùng tag để chọn đúng runner phù hợp.
+#  # Chỉ runner nào có tag "local" mới nhận job này.
+#  tags:
+#    - local
+#
+#  # services:
+#  # Đây là các container phụ trợ chạy cùng job này.
+#  # Ở đây ta bật docker:dind = Docker in Docker
+#  # để Testcontainers trong test có Docker daemon mà dùng.
+#  services:
+#    - name: docker:24-dind
+#      # alias:
+#      # hostname của service này trong network nội bộ job.
+#      # Tức là container job chính có thể gọi tới Docker daemon bằng host "docker"
+#      alias: docker
+#
+#  # variables riêng của job test
+#  # Nếu trùng tên biến global thì biến ở đây sẽ ghi đè trong job này.
+#  variables:
+#    # Testcontainers/Docker client sẽ nói chuyện với Docker daemon qua địa chỉ này
+#    DOCKER_HOST: tcp://docker:2375
+#
+#    # Tắt TLS cert dir để cấu hình đơn giản hơn khi dùng dind
+#    DOCKER_TLS_CERTDIR: ""
+#
+#    # Docker storage driver
+#    DOCKER_DRIVER: overlay2
+#
+#    # Gợi ý cho Testcontainers biết host Docker đang là "docker"
+#    TESTCONTAINERS_HOST_OVERRIDE: docker
+#
+#  # script:
+#  # Đây là phần lệnh shell chính mà job sẽ chạy.
+#  # Mỗi dòng bắt đầu bằng "- " là một command.
+#  # GitLab sẽ chạy tuần tự từ trên xuống dưới.
+#  script:
+#    # Cho phép chạy file mvnw
+#    - chmod +x mvnw
+#
+#    # ./mvnw:
+#    #   dùng Maven Wrapper của project, đảm bảo đúng version Maven theo project
+#    # test:
+#    #   chạy phase test của Maven
+#    # -pl auth-service:
+#    #   chỉ định module cần chạy là auth-service
+#    # -am:
+#    #   also make = build luôn các module phụ thuộc cần thiết
+#    #   Ví dụ auth-service phụ thuộc core thì Maven sẽ build core luôn
+#    - ./mvnw test -pl auth-service -am
+#
+#    # Chạy test cho user-service theo logic tương tự
+#    - ./mvnw test -pl user-service -am
+#
+#  # artifacts:
+#  # Job test thường không cần truyền file cho build/deploy,
+#  # nhưng lại rất nên upload report test để GitLab hiển thị.
+#  artifacts:
+#    # when: always
+#    # nghĩa là kể cả test fail thì GitLab vẫn cố upload report
+#    when: always
+#
+#    reports:
+#      junit:
+#        # Đây là file XML do Maven Surefire sinh ra
+#        # GitLab sẽ đọc để hiển thị số test pass/fail trong tab Tests
+#        - auth-service/target/surefire-reports/*.xml
+#        - user-service/target/surefire-reports/*.xml
+#
+#
+## ================= BUILD =================
+#build-job:
+#  stage: build
+#
+#  tags:
+#    - local
+#
+#  script:
+#    # Cho phép chạy Maven Wrapper
+#    - chmod +x mvnw
+#
+#    # clean:
+#    #   xóa output cũ (target/)
+#    # package:
+#    #   build và đóng gói artifact, ở đây là file .jar
+#    # -DskipTests:
+#    #   bỏ qua test ở stage này
+#    #   vì test đã chạy ở stage test rồi
+#    - ./mvnw clean package -DskipTests
+#
+#  artifacts:
+#    # paths:
+#    # Các file jar được build ra sẽ được GitLab lưu lại làm artifact.
+#    # Đây là output thật sự của build-job.
+#    # deploy-job sẽ lấy lại các file này để dùng.
+#    paths:
+#      - core/target/*.jar
+#      - auth-service/target/*.jar
+#      - user-service/target/*.jar
+#
+#    # Artifact chỉ giữ trong 1 giờ
+#    # Giúp tiết kiệm storage của GitLab
+#    expire_in: 1 hour
+#
+#
+## ================= DEPLOY =================
+#deploy-job:
+#  # Job này thuộc stage deploy
+#  stage: deploy
+#
+#  # Job deploy không dùng Maven image nữa,
+#  # mà dùng Docker CLI image để chạy docker run
+#  image: docker:24
+#
+#  services:
+#    - name: docker:24-dind
+#      alias: docker
+#
+#  tags:
+#    - local
+#
+#  variables:
+#    # Docker CLI trong job này sẽ connect tới Docker daemon ở service "docker"
+#    DOCKER_HOST: tcp://docker:2375
+#
+#    # Tắt TLS cert dir
+#    DOCKER_TLS_CERTDIR: ""
+#
+#  # dependencies:
+#  # Nói với GitLab rằng job này cần artifact từ build-job
+#  # Đây là chỗ liên kết dữ liệu giữa build và deploy:
+#  # - build-job tạo jar
+#  # - deploy-job lấy đúng jar đó
+#  dependencies:
+#    - build-job
+#
+#  # only:
+#  # Chỉ cho job deploy chạy khi pipeline được trigger từ 2 branch này:
+#  # Các branch khác sẽ không có deploy-job trong pipeline.
+#  only:
+#    - main
+#    - review/r4
+#
+#  script:
+#    # ls auth-service/target/*.jar:
+#    #   liệt kê file jar trong thư mục target của auth-service
+#    # head -n 1:
+#    #   lấy file đầu tiên
+#    # Biến AUTH_JAR sẽ chứa đường dẫn file jar đó
+#    - 'AUTH_JAR=$(ls auth-service/target/*.jar | head -n 1)'
+#
+#    # Tương tự cho user-service
+#    - 'USER_JAR=$(ls user-service/target/*.jar | head -n 1)'
+#
+#    # In ra để debug xem đang dùng file jar nào
+#    - 'echo "Using auth jar: $AUTH_JAR"'
+#    - 'echo "Using user jar: $USER_JAR"'
+#
+#    # Xóa container cũ nếu đã tồn tại
+#    # docker rm -f:
+#    # - rm = remove container
+#    # - -f = force
+#    # || true:
+#    # Nếu container chưa tồn tại thì lệnh sẽ fail,
+#    # nhưng ta không muốn job fail vì chuyện đó,
+#    # nên thêm || true để bỏ qua lỗi.
+#    - 'docker rm -f "$AUTH_APP_NAME" || true'
+#    - 'docker rm -f "$USER_APP_NAME" || true'
+#
+#    # Block shell nhiều dòng.
+#    # Dùng dấu | để viết command dài dễ đọc hơn.
+#    # Nếu không dùng | thì phải nhét cả command lên 1 dòng rất rối.
+#    - |
+#      docker run -d \
+#        --name "$AUTH_APP_NAME" \
+#        -p 8080:8080 \
+#        -v "$CI_PROJECT_DIR/$AUTH_JAR:/app.jar" \
+#        mcr.microsoft.com/openjdk/jdk:17-ubuntu \
+#        java -jar /app.jar
+#
+#    # Giải thích lệnh docker run phía trên:
+#    # docker run:
+#    #   tạo và chạy container mới
+#    # -d:
+#    #   chạy background (detached mode)
+#    # --name "$AUTH_APP_NAME":
+#    #   đặt tên container, ở đây là auth-service
+#    # -p 8080:8080:
+#    #   map cổng 8080 của host -> 8080 của container
+#    # -v "$CI_PROJECT_DIR/$AUTH_JAR:/app.jar":
+#    #   mount file jar từ workspace của GitLab job vào trong container
+#    #   với đường dẫn /app.jar
+#    #
+#    # mcr.microsoft.com/openjdk/jdk:17-ubuntu:
+#    #   image Java runtime để chạy jar
+#    #
+#    # java -jar /app.jar:
+#    #   command chạy bên trong container
+#
+#    # Tương tự, chạy user-service ở cổng host 8081
+#    - |
+#      docker run -d \
+#        --name "$USER_APP_NAME" \
+#        -p 8081:8080 \
+#        -v "$CI_PROJECT_DIR/$USER_JAR:/app.jar" \
+#        mcr.microsoft.com/openjdk/jdk:17-ubuntu \
+#        java -jar /app.jar
