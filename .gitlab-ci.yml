@@ -31,11 +31,11 @@ unit-test-auth:
   stage: test
   tags:
     - local
-  #  rules:
-  #    - changes:
-  #        - pom.xml
-  #        - core/**
-  #        - auth-service/**
+#    rules:
+#      - changes:
+#          - pom.xml
+#          - core/**
+#          - auth-service/**
   script:
     - chmod +x mvnw
     - ./mvnw test -pl auth-service -am -T 1C -Dtest='*Test'
@@ -49,11 +49,11 @@ unit-test-user:
   stage: test
   tags:
     - local
-  #  rules:
-  #    - changes:
-  #        - pom.xml
-  #        - core/**
-  #        - user-service/**
+#    rules:
+#      - changes:
+#          - pom.xml
+#          - core/**
+#          - user-service/**
   script:
     - chmod +x mvnw
     - ./mvnw test -pl user-service -am -T 1C -Dtest='*Test'
@@ -81,10 +81,10 @@ integration-test-auth:
     TESTCONTAINERS_REUSE_ENABLE: "true"
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4"'
-  #      changes:
-  #        - pom.xml
-  #        - core/**
-  #        - auth-service/**
+#        changes:
+#          - pom.xml
+#          - core/**
+#          - auth-service/**
   script:
     - chmod +x mvnw
     - ./mvnw verify -pl auth-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true
@@ -108,10 +108,10 @@ integration-test-user:
     TESTCONTAINERS_REUSE_ENABLE: "true"
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4"'
-  #      changes:
-  #        - pom.xml
-  #        - core/**
-  #        - user-service/**
+#        changes:
+#          - pom.xml
+#          - core/**
+#          - user-service/**
   script:
     - chmod +x mvnw
     - ./mvnw verify -pl user-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true
@@ -123,82 +123,55 @@ integration-test-user:
         - user-service/target/failsafe-reports/*.xml
 
 # ================= DOCKER BUILD & PUSH =================
-# Dockerfile của bạn là multi-module nên build context phải là "."
-# và chỉ định Dockerfile bằng -f auth-service/Dockerfile / user-service/Dockerfile
+# Build context = "." vì project là multi-module Maven
 
 docker-auth:
   stage: docker
-  image: docker:24
-  services:
-    - name: docker:24-dind
-      alias: docker
   tags:
     - local
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-  #  rules:
-  #    - changes:
-  #        - pom.xml
-  #        - core/**
-  #        - auth-service/**
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
   script:
+    - docker --version
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker build -t "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA" -f auth-service/Dockerfile .
     - docker push "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
 
 docker-user:
   stage: docker
-  image: docker:24
-  services:
-    - name: docker:24-dind
-      alias: docker
   tags:
     - local
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-  #  rules:
-  #    - changes:
-  #        - pom.xml
-  #        - core/**
-  #        - user-service/**
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
   script:
+    - docker --version
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker build -t "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA" -f user-service/Dockerfile .
     - docker push "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
 
 # ================= DEPLOY =================
-# Đây vẫn là deploy kiểu demo bằng docker:dind trong CI
-# job xong thì môi trường này có thể không sống bền như deploy server thật
-
+# Job này chạy trực tiếp trên máy host có cài GitLab Runner + Docker
+# Không dùng docker:dind nữa
+# Cần có file docker-compose.deploy.yml trong repo
 deploy:
   stage: deploy
-  image: docker:24
-  services:
-    - name: docker:24-dind
-      alias: docker
   tags:
     - local
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-  only:
-    - review/r4
+  needs:
+    - docker-auth
+    - docker-user
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
   script:
+    - docker --version
+    - docker compose version
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - docker pull "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
-    - docker pull "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
-    - docker rm -f "$AUTH_APP_NAME" || true
-    - docker rm -f "$USER_APP_NAME" || true
-    - |
-      docker run -d \
-        --name "$AUTH_APP_NAME" \
-        -p 8080:8080 \
-        "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
-    - |
-      docker run -d \
-        --name "$USER_APP_NAME" \
-        -p 8081:8080 \
-        "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
-
+    - export AUTH_IMAGE="$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
+    - export USER_IMAGE="$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
+    - docker pull "$AUTH_IMAGE"
+    - docker pull "$USER_IMAGE"
+    - AUTH_IMAGE="$AUTH_IMAGE" USER_IMAGE="$USER_IMAGE" docker compose -f docker-compose.deploy.yml up -d
+    - docker image prune -f
 
 
 
@@ -367,7 +340,7 @@ deploy:
 #      - user-service/target/*.jar
 #    expire_in: 1 hour
 #
-## ================= DOCKER BUILD & PUSH =================
+## ================= DOCKER COPY JAR & PUSH =================
 ## Dockerfile của bạn là multi-module nên build context phải là "."
 ## và chỉ định Dockerfile bằng -f auth-service/Dockerfile / user-service/Dockerfile
 #

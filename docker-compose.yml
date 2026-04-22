@@ -83,6 +83,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   user-service:
     build:
@@ -114,7 +116,7 @@ services:
       postgres:
         condition: service_healthy
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
 
 #Tạo volume trong docker, docker tự quản lý chỗ lưu mình ko cần quan tâm
 #Giống mình chạy lệnh docker volume create postgres_data
