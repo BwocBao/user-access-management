@@ -4,7 +4,7 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitMQ
-    restart: always
+    restart: unless-stopped
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -20,7 +20,7 @@ services:
   postgres:
     image: postgres:15
     container_name: postgres-db
-    restart: always
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -40,7 +40,7 @@ services:
   auth-service:
     image: ${AUTH_IMAGE}
     container_name: auth-service
-    restart: always
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -64,7 +64,7 @@ services:
   user-service:
     image: ${USER_IMAGE}
     container_name: user-service
-    restart: always
+    restart: unless-stopped
     env_file:
       - .env
     environment:

@@ -6,10 +6,6 @@ image: maven:3.9.6-eclipse-temurin-17
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
   SPRING_PROFILES_ACTIVE: ci
-
-  AUTH_APP_NAME: auth-service
-  USER_APP_NAME: user-service
-
   DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
 
@@ -31,11 +27,6 @@ unit-test-auth:
   stage: test
   tags:
     - local
-#    rules:
-#      - changes:
-#          - pom.xml
-#          - core/**
-#          - auth-service/**
   script:
     - chmod +x mvnw
     - ./mvnw test -pl auth-service -am -T 1C -Dtest='*Test'
@@ -49,11 +40,6 @@ unit-test-user:
   stage: test
   tags:
     - local
-#    rules:
-#      - changes:
-#          - pom.xml
-#          - core/**
-#          - user-service/**
   script:
     - chmod +x mvnw
     - ./mvnw test -pl user-service -am -T 1C -Dtest='*Test'
@@ -64,9 +50,7 @@ unit-test-user:
         - user-service/target/surefire-reports/*.xml
 
 # ================= INTEGRATION TEST =================
-# Lưu ý:
-# Runner Docker executor phải bật privileged = true
-# thì Testcontainers mới chạy ổn với docker:dind
+# chạy bằng docker runner + dind
 
 integration-test-auth:
   stage: test
@@ -80,14 +64,10 @@ integration-test-auth:
     TESTCONTAINERS_HOST_OVERRIDE: docker
     TESTCONTAINERS_REUSE_ENABLE: "true"
   rules:
-    - if: '$CI_COMMIT_BRANCH == "review/r4"'
-#        changes:
-#          - pom.xml
-#          - core/**
-#          - auth-service/**
+    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
   script:
     - chmod +x mvnw
-    - ./mvnw verify -pl auth-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true
+    - ./mvnw verify -pl auth-service -am -T 1C -Dit.test='*IT' -DfailIfNoTests=false -Djacoco.skip=true
   artifacts:
     when: always
     reports:
@@ -107,14 +87,10 @@ integration-test-user:
     TESTCONTAINERS_HOST_OVERRIDE: docker
     TESTCONTAINERS_REUSE_ENABLE: "true"
   rules:
-    - if: '$CI_COMMIT_BRANCH == "review/r4"'
-#        changes:
-#          - pom.xml
-#          - core/**
-#          - user-service/**
+    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
   script:
     - chmod +x mvnw
-    - ./mvnw verify -pl user-service -am -T 1C -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false -Djacoco.skip=true
+    - ./mvnw verify -pl user-service -am -T 1C -Dit.test='*IT' -DfailIfNoTests=false -Djacoco.skip=true
   artifacts:
     when: always
     reports:
@@ -123,12 +99,12 @@ integration-test-user:
         - user-service/target/failsafe-reports/*.xml
 
 # ================= DOCKER BUILD & PUSH =================
-# Build context = "." vì project là multi-module Maven
+# chạy bằng shell runner trên chính máy host
 
 docker-auth:
   stage: docker
   tags:
-    - local
+    - local-shell
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
   script:
@@ -140,7 +116,7 @@ docker-auth:
 docker-user:
   stage: docker
   tags:
-    - local
+    - local-shell
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
   script:
@@ -150,13 +126,12 @@ docker-user:
     - docker push "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
 
 # ================= DEPLOY =================
-# Job này chạy trực tiếp trên máy host có cài GitLab Runner + Docker
-# Không dùng docker:dind nữa
-# Cần có file docker-compose.deploy.yml trong repo
+# chạy bằng shell runner trên máy host thật
+
 deploy:
   stage: deploy
   tags:
-    - local
+    - local-shell
   needs:
     - docker-auth
     - docker-user
