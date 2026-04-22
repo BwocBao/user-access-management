@@ -27,6 +27,12 @@ unit-test-auth:
   stage: test
   tags:
     - local
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pom.xml
+        - core/**
+        - auth-service/**
   script:
     - chmod +x mvnw
     - ./mvnw test -pl auth-service -am -T 1C -Dtest='*Test'
@@ -40,6 +46,12 @@ unit-test-user:
   stage: test
   tags:
     - local
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pom.xml
+        - core/**
+        - user-service/**
   script:
     - chmod +x mvnw
     - ./mvnw test -pl user-service -am -T 1C -Dtest='*Test'
@@ -65,6 +77,10 @@ integration-test-auth:
     TESTCONTAINERS_REUSE_ENABLE: "true"
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pom.xml
+        - core/**
+        - auth-service/**
   script:
     - chmod +x mvnw
     - ./mvnw verify -pl auth-service -am -T 1C -Dit.test='*IT' -DfailIfNoTests=false -Djacoco.skip=true
@@ -88,6 +104,10 @@ integration-test-user:
     TESTCONTAINERS_REUSE_ENABLE: "true"
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pom.xml
+        - core/**
+        - user-service/**
   script:
     - chmod +x mvnw
     - ./mvnw verify -pl user-service -am -T 1C -Dit.test='*IT' -DfailIfNoTests=false -Djacoco.skip=true
@@ -107,6 +127,11 @@ docker-auth:
     - local-shell
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+#      changes:
+#        - pom.xml
+#        - core/**
+#        - auth-service/**
+#        - auth-service/Dockerfile
   script:
     - docker --version
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
@@ -119,6 +144,11 @@ docker-user:
     - local-shell
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+#      changes:
+#        - pom.xml
+#        - core/**
+#        - user-service/**
+#        - user-service/Dockerfile
   script:
     - docker --version
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
@@ -137,17 +167,25 @@ deploy:
     - docker-user
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+#      changes:
+#        - pom.xml
+#        - core/**
+#        - auth-service/**
+#        - user-service/**
+#        - auth-service/Dockerfile
+#        - user-service/Dockerfile
+#        - docker-compose.deploy.yml
+#        - .gitlab-ci.yml
   script:
     - docker --version
     - docker compose version
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - export AUTH_IMAGE="$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
-    - export USER_IMAGE="$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
-    - docker pull "$AUTH_IMAGE"
-    - docker pull "$USER_IMAGE"
-    - AUTH_IMAGE="$AUTH_IMAGE" USER_IMAGE="$USER_IMAGE" docker compose -f docker-compose.deploy.yml up -d
+    - echo $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
+    - $env:AUTH_IMAGE="$env:CI_REGISTRY_IMAGE/auth:$env:CI_COMMIT_SHA"
+    - $env:USER_IMAGE="$env:CI_REGISTRY_IMAGE/user:$env:CI_COMMIT_SHA"
+    - docker pull $env:AUTH_IMAGE
+    - docker pull $env:USER_IMAGE
+    - docker compose -f docker-compose.deploy.yml up -d
     - docker image prune -f
-
 
 
 
