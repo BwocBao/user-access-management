@@ -391,7 +391,7 @@ docker-user:
     - docker push "$env:CI_REGISTRY_IMAGE/user:$env:CI_COMMIT_SHA"
 
 # ================= DEPLOY =================
-# để tránh needs bị kẹt khi chỉ đổi 1 service, cách đơn giản là deploy khi có thay đổi backend chung
+# Để tránh needs bị kẹt khi chỉ đổi 1 service, cách đơn giản là deploy khi có thay đổi backend chung
 # và yêu cầu cả 2 image đã được build trong pipeline đó
 
 deploy:

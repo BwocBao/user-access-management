@@ -64,6 +64,10 @@ EXPOSE 8082
 ENTRYPOINT ["java", "-jar", "user-service.jar"]
 
 
+
+
+
+
 #Cách 2:
 #FROM eclipse-temurin:17-jdk-jammy
 #
