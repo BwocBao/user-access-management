@@ -1,216 +1,27 @@
-##Cách 1: Docker build rồi push luôn không cần stage build
-## ================= GLOBAL IMAGE =================
-#image: maven:3.9.6-eclipse-temurin-17
-#
-## ================= GLOBAL VARIABLES =================
-#variables:
-#  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-#  SPRING_PROFILES_ACTIVE: ci
-#  DOCKER_TLS_CERTDIR: ""
-#  DOCKER_DRIVER: overlay2
-#
-## ================= CACHE =================
-#cache:
-#  key: maven-cache
-#  paths:
-#    - .m2/repository
-#
-## ================= STAGES =================
-#stages:
-#  - test
-#  - docker
-#  - deploy
-#
-## ================= UNIT TEST =================
-#
-#unit-test-auth:
-#  stage: test
-#  tags:
-#    - local
-#  rules:
-#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-#      changes:
-#        - pom.xml
-#        - core/**
-#        - auth-service/**
-#  script:
-#    - chmod +x mvnw
-#    - ./mvnw test -pl auth-service -am -T 1C -Dtest='*Test'
-#  artifacts:
-#    when: always
-#    reports:
-#      junit:
-#        - auth-service/target/surefire-reports/*.xml
-#
-#unit-test-user:
-#  stage: test
-#  tags:
-#    - local
-#  rules:
-#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-#      changes:
-#        - pom.xml
-#        - core/**
-#        - user-service/**
-#  script:
-#    - chmod +x mvnw
-#    - ./mvnw test -pl user-service -am -T 1C -Dtest='*Test'
-#  artifacts:
-#    when: always
-#    reports:
-#      junit:
-#        - user-service/target/surefire-reports/*.xml
-#
-## ================= INTEGRATION TEST =================
-## chạy bằng docker runner + dind
-#
-#integration-test-auth:
-#  stage: test
-#  tags:
-#    - local
-#  services:
-#    - name: docker:24-dind
-#      alias: docker
-#  variables:
-#    DOCKER_HOST: tcp://docker:2375
-#    TESTCONTAINERS_HOST_OVERRIDE: docker
-#    TESTCONTAINERS_REUSE_ENABLE: "true"
-#  rules:
-#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-#      changes:
-#        - pom.xml
-#        - core/**
-#        - auth-service/**
-#  script:
-#    - chmod +x mvnw
-#    - ./mvnw verify -pl auth-service -am -T 1C -Dit.test='*IT' -DfailIfNoTests=false -Djacoco.skip=true
-#  artifacts:
-#    when: always
-#    reports:
-#      junit:
-#        - auth-service/target/surefire-reports/*.xml
-#        - auth-service/target/failsafe-reports/*.xml
-#
-#integration-test-user:
-#  stage: test
-#  tags:
-#    - local
-#  services:
-#    - name: docker:24-dind
-#      alias: docker
-#  variables:
-#    DOCKER_HOST: tcp://docker:2375
-#    TESTCONTAINERS_HOST_OVERRIDE: docker
-#    TESTCONTAINERS_REUSE_ENABLE: "true"
-#  rules:
-#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-#      changes:
-#        - pom.xml
-#        - core/**
-#        - user-service/**
-#  script:
-#    - chmod +x mvnw
-#    - ./mvnw verify -pl user-service -am -T 1C -Dit.test='*IT' -DfailIfNoTests=false -Djacoco.skip=true
-#  artifacts:
-#    when: always
-#    reports:
-#      junit:
-#        - user-service/target/surefire-reports/*.xml
-#        - user-service/target/failsafe-reports/*.xml
-#
-## ================= DOCKER BUILD & PUSH =================
-## chạy bằng shell runner trên chính máy host
-#
-#docker-auth:
-#  stage: docker
-#  tags:
-#    - local-shell
-#  rules:
-#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-##      changes:
-##        - pom.xml
-##        - core/**
-##        - auth-service/**
-##        - auth-service/Dockerfile
-#  script:
-#    - docker --version
-#    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-#    - docker build -t "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA" -f auth-service/Dockerfile .
-#    - docker push "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
-#
-#docker-user:
-#  stage: docker
-#  tags:
-#    - local-shell
-#  rules:
-#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-##      changes:
-##        - pom.xml
-##        - core/**
-##        - user-service/**
-##        - user-service/Dockerfile
-#  script:
-#    - docker --version
-#    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-#    - docker build -t "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA" -f user-service/Dockerfile .
-#    - docker push "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
-#
-## ================= DEPLOY =================
-## chạy bằng shell runner trên máy host thật
-#
-#deploy:
-#  stage: deploy
-#  tags:
-#    - local-shell
-#  needs:
-#    - docker-auth
-#    - docker-user
-#  rules:
-#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-##      changes:
-##        - pom.xml
-##        - core/**
-##        - auth-service/**
-##        - user-service/**
-##        - auth-service/Dockerfile
-##        - user-service/Dockerfile
-##        - docker-compose.deploy.yml
-##        - .gitlab-ci.yml
-#  script:
-#    - docker --version
-#    - docker compose version
-#    - echo $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
-#    - $env:AUTH_IMAGE="$env:CI_REGISTRY_IMAGE/auth:$env:CI_COMMIT_SHA"
-#    - $env:USER_IMAGE="$env:CI_REGISTRY_IMAGE/user:$env:CI_COMMIT_SHA"
-#    - docker pull $env:AUTH_IMAGE
-#    - docker pull $env:USER_IMAGE
-#    - docker compose -f docker-compose.deploy.yml up -d
-#    - docker image prune -f
-
-
-
-
-#Cách 2: Docker copy image từ stage build rồi push lên
+#Cách 1: Docker build rồi push luôn không cần stage build
+# ================= GLOBAL IMAGE =================
 image: maven:3.9.6-eclipse-temurin-17
 
+# ================= GLOBAL VARIABLES =================
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
   SPRING_PROFILES_ACTIVE: ci
   DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
 
+# ================= CACHE =================
 cache:
   key: maven-cache
   paths:
     - .m2/repository
 
+# ================= STAGES =================
 stages:
   - test
-  - build
   - docker
   - deploy
 
-# ================= TEST =================
+# ================= UNIT TEST =================
 
 unit-test-auth:
   stage: test
@@ -249,6 +60,9 @@ unit-test-user:
     reports:
       junit:
         - user-service/target/surefire-reports/*.xml
+
+# ================= INTEGRATION TEST =================
+# chạy bằng docker runner + dind
 
 integration-test-auth:
   stage: test
@@ -304,79 +118,30 @@ integration-test-user:
         - user-service/target/surefire-reports/*.xml
         - user-service/target/failsafe-reports/*.xml
 
-# ================= BUILD JAR =================
-# build ra app.jar cố định để Dockerfile copy cho dễ
-
-build-auth:
-  stage: build
-  tags:
-    - local
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-#      changes:
-#        - pom.xml
-#        - core/**
-#        - auth-service/**
-  script:
-    - chmod +x mvnw
-    - ./mvnw -T 1C clean package -DskipTests -pl auth-service -am
-    - |
-      JAR_FILE=$(find auth-service/target -maxdepth 1 -type f -name "*.jar" ! -name "*.original" | head -n 1)
-      cp "$JAR_FILE" auth-service/target/app.jar
-  artifacts:
-    paths:
-      - auth-service/target/app.jar
-    expire_in: 1 hour
-
-build-user:
-  stage: build
-  tags:
-    - local
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-#      changes:
-#        - pom.xml
-#        - core/**
-#        - user-service/**
-  script:
-    - chmod +x mvnw
-    - ./mvnw -T 1C clean package -DskipTests -pl user-service -am
-    - |
-      JAR_FILE=$(find user-service/target -maxdepth 1 -type f -name "*.jar" ! -name "*.original" | head -n 1)
-      cp "$JAR_FILE" user-service/target/app.jar
-  artifacts:
-    paths:
-      - user-service/target/app.jar
-    expire_in: 1 hour
-
-# ================= DOCKER COPY JAR & PUSH =================
-# shell runner trên Windows + Docker local
+# ================= DOCKER BUILD & PUSH =================
+# chạy bằng shell runner trên chính máy host
 
 docker-auth:
   stage: docker
   tags:
     - local-shell
-  needs:
-    - build-auth
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
-      changes:
+#      changes:
 #        - pom.xml
 #        - core/**
 #        - auth-service/**
 #        - auth-service/Dockerfile
   script:
     - docker --version
-    - echo $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
-    - docker build -t "$env:CI_REGISTRY_IMAGE/auth:$env:CI_COMMIT_SHA" -f auth-service/Dockerfile .
-    - docker push "$env:CI_REGISTRY_IMAGE/auth:$env:CI_COMMIT_SHA"
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA" -f auth-service/Dockerfile .
+    - docker push "$CI_REGISTRY_IMAGE/auth:$CI_COMMIT_SHA"
 
 docker-user:
   stage: docker
   tags:
     - local-shell
-  needs:
-    - build-user
   rules:
     - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
 #      changes:
@@ -386,13 +151,12 @@ docker-user:
 #        - user-service/Dockerfile
   script:
     - docker --version
-    - echo $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
-    - docker build -t "$env:CI_REGISTRY_IMAGE/user:$env:CI_COMMIT_SHA" -f user-service/Dockerfile .
-    - docker push "$env:CI_REGISTRY_IMAGE/user:$env:CI_COMMIT_SHA"
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA" -f user-service/Dockerfile .
+    - docker push "$CI_REGISTRY_IMAGE/user:$CI_COMMIT_SHA"
 
 # ================= DEPLOY =================
-# Để tránh needs bị kẹt khi chỉ đổi 1 service, cách đơn giản là deploy khi có thay đổi backend chung
-# và yêu cầu cả 2 image đã được build trong pipeline đó
+# chạy bằng shell runner trên máy host thật
 
 deploy:
   stage: deploy
@@ -422,6 +186,242 @@ deploy:
     - docker pull $env:USER_IMAGE
     - docker compose -f docker-compose.deploy.yml up -d
     - docker image prune -f
+
+
+
+
+##Cách 2: Docker copy image từ stage build rồi push lên
+#image: maven:3.9.6-eclipse-temurin-17
+#
+#variables:
+#  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+#  SPRING_PROFILES_ACTIVE: ci
+#  DOCKER_TLS_CERTDIR: ""
+#  DOCKER_DRIVER: overlay2
+#
+#cache:
+#  key: maven-cache
+#  paths:
+#    - .m2/repository
+#
+#stages:
+#  - test
+#  - build
+#  - docker
+#  - deploy
+#
+## ================= TEST =================
+#
+#unit-test-auth:
+#  stage: test
+#  tags:
+#    - local
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+##      changes:
+##        - pom.xml
+##        - core/**
+##        - auth-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw test -pl auth-service -am -T 1C -Dtest='*Test'
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - auth-service/target/surefire-reports/*.xml
+#
+#unit-test-user:
+#  stage: test
+#  tags:
+#    - local
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+##      changes:
+##        - pom.xml
+##        - core/**
+##        - user-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw test -pl user-service -am -T 1C -Dtest='*Test'
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - user-service/target/surefire-reports/*.xml
+#
+#integration-test-auth:
+#  stage: test
+#  tags:
+#    - local
+#  services:
+#    - name: docker:24-dind
+#      alias: docker
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#    TESTCONTAINERS_HOST_OVERRIDE: docker
+#    TESTCONTAINERS_REUSE_ENABLE: "true"
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+##      changes:
+##        - pom.xml
+##        - core/**
+##        - auth-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw verify -pl auth-service -am -T 1C -Dit.test='*IT' -DfailIfNoTests=false -Djacoco.skip=true
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - auth-service/target/surefire-reports/*.xml
+#        - auth-service/target/failsafe-reports/*.xml
+#
+#integration-test-user:
+#  stage: test
+#  tags:
+#    - local
+#  services:
+#    - name: docker:24-dind
+#      alias: docker
+#  variables:
+#    DOCKER_HOST: tcp://docker:2375
+#    TESTCONTAINERS_HOST_OVERRIDE: docker
+#    TESTCONTAINERS_REUSE_ENABLE: "true"
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+##      changes:
+##        - pom.xml
+##        - core/**
+##        - user-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw verify -pl user-service -am -T 1C -Dit.test='*IT' -DfailIfNoTests=false -Djacoco.skip=true
+#  artifacts:
+#    when: always
+#    reports:
+#      junit:
+#        - user-service/target/surefire-reports/*.xml
+#        - user-service/target/failsafe-reports/*.xml
+#
+## ================= BUILD JAR =================
+## build ra app.jar cố định để Dockerfile copy cho dễ
+#
+#build-auth:
+#  stage: build
+#  tags:
+#    - local
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+##      changes:
+##        - pom.xml
+##        - core/**
+##        - auth-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw -T 1C clean package -DskipTests -pl auth-service -am
+#    - |
+#      JAR_FILE=$(find auth-service/target -maxdepth 1 -type f -name "*.jar" ! -name "*.original" | head -n 1)
+#      cp "$JAR_FILE" auth-service/target/app.jar
+#  artifacts:
+#    paths:
+#      - auth-service/target/app.jar
+#    expire_in: 1 hour
+#
+#build-user:
+#  stage: build
+#  tags:
+#    - local
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+##      changes:
+##        - pom.xml
+##        - core/**
+##        - user-service/**
+#  script:
+#    - chmod +x mvnw
+#    - ./mvnw -T 1C clean package -DskipTests -pl user-service -am
+#    - |
+#      JAR_FILE=$(find user-service/target -maxdepth 1 -type f -name "*.jar" ! -name "*.original" | head -n 1)
+#      cp "$JAR_FILE" user-service/target/app.jar
+#  artifacts:
+#    paths:
+#      - user-service/target/app.jar
+#    expire_in: 1 hour
+#
+## ================= DOCKER COPY JAR & PUSH =================
+## shell runner trên Windows + Docker local
+#
+#docker-auth:
+#  stage: docker
+#  tags:
+#    - local-shell
+#  needs:
+#    - build-auth
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+#      changes:
+##        - pom.xml
+##        - core/**
+##        - auth-service/**
+##        - auth-service/Dockerfile
+#  script:
+#    - docker --version
+#    - echo $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
+#    - docker build -t "$env:CI_REGISTRY_IMAGE/auth:$env:CI_COMMIT_SHA" -f auth-service/Dockerfile .
+#    - docker push "$env:CI_REGISTRY_IMAGE/auth:$env:CI_COMMIT_SHA"
+#
+#docker-user:
+#  stage: docker
+#  tags:
+#    - local-shell
+#  needs:
+#    - build-user
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+##      changes:
+##        - pom.xml
+##        - core/**
+##        - user-service/**
+##        - user-service/Dockerfile
+#  script:
+#    - docker --version
+#    - echo $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
+#    - docker build -t "$env:CI_REGISTRY_IMAGE/user:$env:CI_COMMIT_SHA" -f user-service/Dockerfile .
+#    - docker push "$env:CI_REGISTRY_IMAGE/user:$env:CI_COMMIT_SHA"
+#
+## ================= DEPLOY =================
+## Để tránh needs bị kẹt khi chỉ đổi 1 service, cách đơn giản là deploy khi có thay đổi backend chung
+## và yêu cầu cả 2 image đã được build trong pipeline đó
+#
+#deploy:
+#  stage: deploy
+#  tags:
+#    - local-shell
+#  needs:
+#    - docker-auth
+#    - docker-user
+#  rules:
+#    - if: '$CI_COMMIT_BRANCH == "review/r4" || $CI_COMMIT_BRANCH == "main"'
+##      changes:
+##        - pom.xml
+##        - core/**
+##        - auth-service/**
+##        - user-service/**
+##        - auth-service/Dockerfile
+##        - user-service/Dockerfile
+##        - docker-compose.deploy.yml
+##        - .gitlab-ci.yml
+#  script:
+#    - docker --version
+#    - docker compose version
+#    - echo $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
+#    - $env:AUTH_IMAGE="$env:CI_REGISTRY_IMAGE/auth:$env:CI_COMMIT_SHA"
+#    - $env:USER_IMAGE="$env:CI_REGISTRY_IMAGE/user:$env:CI_COMMIT_SHA"
+#    - docker pull $env:AUTH_IMAGE
+#    - docker pull $env:USER_IMAGE
+#    - docker compose -f docker-compose.deploy.yml up -d
+#    - docker image prune -f
 
 
 
